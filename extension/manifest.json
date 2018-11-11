@@ -1,0 +1,12 @@
+{
+  "manifest_version": 2,
+
+  "name": "ChromeFS Extension",
+  "description": "Connects to ChromeFS filesystem",
+  "version": "1.0",
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  }
+}
