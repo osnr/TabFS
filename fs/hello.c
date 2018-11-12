@@ -24,31 +24,91 @@ struct server_state {
 struct wby_server server;
 struct wby_con *con;
 
-typedef struct response_readdir_t {
-  char **entries;
-  size_t num_entries;
-} response_readdir_t;
+enum opcode {
+    NONE = 0,
 
-response_readdir_t *response;
+    GETATTR,
+    READDIR
+};
+
+struct readdir {
+    char **entries;
+    size_t num_entries;
+};
+
+struct response {
+    enum opcode op;
+
+    int error;
+
+    union {
+        struct stat getattr;
+        struct readdir readdir;
+    } body;
+};
+
+struct response response = (struct response) { .op = NONE };
 
 static const char  *file_path      = "/hello.txt";
 static const char   file_content[] = "Hello World!\n";
 static const size_t file_size      = sizeof(file_content)/sizeof(char) - 1;
 
+static void send_req(cJSON *req) {
+  char *data = cJSON_Print(req);
+  printf("%s\n", data);
+
+  wby_frame_begin(con, WBY_WSOP_TEXT_FRAME);
+  wby_write(con, data, strlen(data));
+  wby_frame_end(con);
+
+  free(data);
+}
+
+#define MAKE_REQ(op, body) \
+  do { \
+    cJSON *req = cJSON_CreateObject(); \
+    cJSON_AddNumberToObject(req, "op", (int) op);        \
+    body \
+    send_req(req); \
+    cJSON_Delete(req); \
+} while (0)
+
+static void await_response(enum opcode op) {
+  memset(&response, 0, sizeof response);
+  do {
+    wby_update(&server);
+  } while (response.op == NONE);
+}
+
 static int
 hello_getattr(const char *path, struct stat *stbuf)
 {
     memset(stbuf, 0, sizeof(struct stat));
+    printf("\n\ngetattr(%s)\n", path);
 
-    if (strcmp(path, "/") == 0) { /* The root directory of our file system. */
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 3;
-    } else if (strcmp(path, file_path) == 0) { /* The only file we have. */
-        stbuf->st_mode = S_IFREG | 0444;
-        stbuf->st_nlink = 1;
-        stbuf->st_size = file_size;
-    } else /* We reject everything else. */
-        return -ENOENT;
+    MAKE_REQ(GETATTR, {
+        cJSON_AddStringToObject(req, "path", path);
+      });
+
+    await_response(GETATTR);
+    if (response.error != 0) {
+      printf("error re getattr(%s): %d\n", path, response.error);
+      return -response.error;
+    }
+
+    stbuf->st_mode = response.body.getattr.st_mode;
+    stbuf->st_nlink = response.body.getattr.st_nlink;
+    stbuf->st_size = response.body.getattr.st_size;
+    printf("returning re getattr(%s)\n", path);
+    /* if (strcmp(path, "/") == 0) { /\* The root directory of our file system. *\/ */
+    /*     stbuf->st_mode = S_IFDIR | 0755; */
+    /*     stbuf->st_nlink = 3; */
+    /* } else if (strcmp(path, file_path) == 0) { /\* The only file we have. *\/ */
+    /*     stbuf->st_mode = S_IFREG | 0444; */
+    /*     stbuf->st_nlink = 1; */
+    /*     stbuf->st_size = file_size; */
+    /* } else /\* We reject everything else. *\/ */
+    /*     return -ENOENT; */
 
     return 0;
 }
@@ -69,41 +129,22 @@ static int
 hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
               off_t offset, struct fuse_file_info *fi)
 {
-    if (strcmp(path, "/") != 0) /* We only recognize the root directory. */
-        return -ENOENT;
+    printf("\n\nreaddir(%s)\n", path);
 
-    // send [READDIR, path] to the websocket handler
-    {
-      char *data;
-      {
-        cJSON *req = cJSON_CreateObject();
-        cJSON_AddStringToObject(req, "op", "readdir");
+    // send {op: "readdir", path} to the websocket handler
+    MAKE_REQ(READDIR, {
         cJSON_AddStringToObject(req, "path", path);
+      });
 
-        data = cJSON_Print(req);
-        printf("%s\n", data);
+    printf("awaiting response to readdir(%s)\n", path);
+    await_response(READDIR);
+    struct readdir *readdir = &response.body.readdir;
+    printf("response: %d files\n", readdir->num_entries);
 
-        cJSON_Delete(req);
-      }
-
-      wby_frame_begin(con, WBY_WSOP_TEXT_FRAME);
-      wby_write(con, data, strlen(data));
-      wby_frame_end(con);
-
-      free(data);
+    for (size_t i = 0; i < readdir->num_entries; ++i) {
+        filler(buf, readdir->entries[i], NULL, 0);
+        printf("entry: [%s]\n", readdir->entries[i]);
     }
-
-    if (response) free(response);
-    response = NULL;
-    do {
-        wby_update(&server);
-    } while (response == NULL);
-
-    printf("response: %d files\n", response->num_entries);
-
-    filler(buf, ".", NULL, 0);           /* Current directory (.)  */
-    filler(buf, "..", NULL, 0);          /* Parent directory (..)  */
-    filler(buf, file_path + 1, NULL, 0); /* The only file we have. */
 
     return 0;
 }
@@ -142,7 +183,6 @@ dispatch(struct wby_con *connection, void *userdata)
 static int
 websocket_connect(struct wby_con *connection, void *userdata)
 {
-    /* Allow websocket upgrades on /wstest */
     struct server_state *state = (struct server_state*)userdata;
     /* connection bound userdata */
     connection->user_data = NULL;
@@ -202,15 +242,39 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
     }
 
     cJSON *ret = cJSON_Parse((const char *) data);
-    cJSON *op = cJSON_GetObjectItemCaseSensitive(ret, "op");
-    if (strcmp(op->valuestring, "readdir") == 0) {
-      response = malloc(sizeof(response));
-      response->entries = malloc(sizeof(char *) * 10);
-      response->entries[0] = "a";
-      response->entries[1] = "b";
-      response->num_entries = 2;
+
+    cJSON *op_item = cJSON_GetObjectItemCaseSensitive(ret, "op");
+    response.op = (enum opcode) op_item->valueint;
+
+    cJSON *error_item = cJSON_GetObjectItemCaseSensitive(ret, "error");
+    if (error_item) {
+      response.error = error_item->valueint;
+      if (response.error != 0) goto done;
     }
 
+    if (response.op == READDIR) {
+      struct readdir *readdir = &response.body.readdir;
+
+      cJSON *entries = cJSON_GetObjectItemCaseSensitive(ret, "entries");
+
+      readdir->num_entries = cJSON_GetArraySize(entries);
+      readdir->entries = malloc(sizeof(char *) * readdir->num_entries);
+
+      int i = 0;
+      cJSON *entry;
+      cJSON_ArrayForEach(entry, entries) {
+        readdir->entries[i++] = strdup(cJSON_GetStringValue(entry));
+      }
+
+    } else if (response.op == GETATTR) {
+      struct stat *getattr = &response.body.getattr;
+      getattr->st_mode = cJSON_GetObjectItemCaseSensitive(ret, "st_mode")->valueint;
+      getattr->st_nlink = cJSON_GetObjectItemCaseSensitive(ret, "st_nlink")->valueint;
+      getattr->st_size = cJSON_GetObjectItemCaseSensitive(ret, "st_size")->valueint;
+    }
+
+ done:
+    if (ret) cJSON_Delete(ret);
     return 0;
 }
 
