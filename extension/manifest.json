@@ -5,6 +5,8 @@
   "description": "Connects to ChromeFS filesystem",
   "version": "1.0",
 
+  "permissions": ["tabs"],
+
   "background": {
     "scripts": ["background.js"],
     "persistent": true

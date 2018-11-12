@@ -24,6 +24,32 @@ const unix = {
   S_IFSOCK: 0140000, // socket
 }
 
+function readdir(path) {
+  if (path === "/") {
+    return ["tabs"];
+
+  } else if (path === "/tabs") {
+    return ["hello.txt"];
+  }
+}
+
+function getattr(path) {
+  const response = {};
+  if (path === "/" || path === "/tabs") {
+    response.st_mode = unix.S_IFDIR | 0755;
+    response.st_nlink = 3;
+
+  } else if (path === "/tabs/hello.txt") {
+    response.st_mode = unix.S_IFREG | 0444;
+    response.st_nlink = 1;
+    response.st_size = 10; // FIXME
+
+  } else {
+    response.error = unix.ENOENT;
+  }
+  return response;
+}
+
 ws.onmessage = function(event) {
   const req = JSON.parse(event.data);
   console.log('req', Object.entries(ops).find(([op, opcode]) => opcode === req.op)[0], req);
@@ -32,25 +58,17 @@ ws.onmessage = function(event) {
   if (req.op === ops.READDIR) {
     response = {
       op: ops.READDIR,
-      entries: [".", "..", "hello.txt"]
+      entries: [".", "..", ...readdir(req.path)]
     };
+
   } else if (req.op === ops.GETATTR) {
     response = {
       op: ops.GETATTR,
       st_mode: 0,
       st_nlink: 0,
-      st_size: 0
+      st_size: 0,
+      ...getattr(req.path)
     };
-    if (req.path === "/") {
-      response.st_mode = unix.S_IFDIR | 0755;
-      response.st_nlink = 3;
-    } else if (req.path === "/hello.txt") {
-      response.st_mode = unix.S_IFREG | 0444;
-      response.st_nlink = 1;
-      response.st_size = 10; // FIXME
-    } else {
-      response.error = unix.ENOENT;
-    }
   }
 
   console.log('response', Object.entries(ops).find(([op, opcode]) => opcode === response.op)[0], response);
