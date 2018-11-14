@@ -15,7 +15,10 @@
 #include "cJSON/cJSON.c"
 
 struct wby_server server;
-struct wby_con *con;
+struct wby_con *con = NULL;
+
+pthread_mutex_t request_data_mutex = PTHREAD_MUTEX_INITIALIZER;
+char *request_data = NULL;
 
 enum opcode {
     NONE = 0,
@@ -42,30 +45,48 @@ struct response {
 
 pthread_cond_t response_cv = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t response_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 struct response response = (struct response) { .op = NONE };
 
 static const char  *file_path      = "/hello.txt";
 static const char   file_content[] = "Hello World!\n";
 static const size_t file_size      = sizeof(file_content)/sizeof(char) - 1;
 
-static void send_req(cJSON *req) {
-  char *data = cJSON_Print(req);
-  printf("%s\n", data);
+static void dispatch_send_req(cJSON *req) {
+  pthread_mutex_lock(&request_data_mutex);
+
+  request_data = cJSON_Print(req);
+  printf("%s\n", request_data);
+
+  pthread_mutex_unlock(&request_data_mutex);
+}
+
+void send_req_if_any() {
+  pthread_mutex_lock(&request_data_mutex);
+
+  if (con == NULL || request_data == NULL) goto done;
 
   wby_frame_begin(con, WBY_WSOP_TEXT_FRAME);
-  wby_write(con, data, strlen(data));
+  wby_write(con, request_data, strlen(request_data));
   wby_frame_end(con);
 
-  free(data);
+  free(request_data);
+  request_data = NULL;
+
+ done:
+  pthread_mutex_unlock(&request_data_mutex);
 }
 
 #define MAKE_REQ(op, body) \
   do { \
+    pthread_mutex_lock(&request_data_mutex); \
+    int disconnected = (con == NULL); \
+    pthread_mutex_unlock(&request_data_mutex); \
+    if (disconnected) return -EIO; \
+    \
     cJSON *req = cJSON_CreateObject(); \
     cJSON_AddNumberToObject(req, "op", (int) op);        \
     body \
-    send_req(req); \
+    dispatch_send_req(req); \
     cJSON_Delete(req); \
 } while (0)
 
@@ -290,6 +311,7 @@ static void
 websocket_closed(struct wby_con *connection, void *userdata)
 {
     printf("WebSocket closed\n");
+    con = NULL;
 }
 
 static void
@@ -324,6 +346,8 @@ void *websocket_main(void *threadid)
 
     printf("Awaiting WebSocket connection from Chrome extension.\n");
     for (;;) {
+        send_req_if_any();
+
         wby_update(&server);
     }
 
