@@ -1,11 +1,11 @@
 {
   "manifest_version": 2,
 
-  "name": "ChromeFS Extension",
-  "description": "Connects to ChromeFS filesystem",
+  "name": "TabFS Extension",
+  "description": "Connects to TabFS filesystem",
   "version": "1.0",
 
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "debugger"],
 
   "background": {
     "scripts": ["background.js"],

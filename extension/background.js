@@ -24,33 +24,75 @@ const unix = {
   S_IFSOCK: 0140000, // socket
 }
 
-function readdir(path) {
-  if (path === "/") {
-    return ["tabs"];
-
-  } else if (path === "/tabs") {
-    return ["hello.txt"];
-  }
+function queryTabs() {
+  return new Promise((resolve, reject) => chrome.tabs.query({}, resolve));
 }
 
-function getattr(path) {
-  const response = {};
-  if (path === "/" || path === "/tabs") {
-    response.st_mode = unix.S_IFDIR | 0755;
-    response.st_nlink = 3;
+const router = {
+  "tabs": {
+    "by-id": {
+      async readdir() {
+        const tabs = await queryTabs();
+        return tabs.map(tab => String(tab.id));
+      },
 
-  } else if (path === "/tabs/hello.txt") {
-    response.st_mode = unix.S_IFREG | 0444;
-    response.st_nlink = 1;
-    response.st_size = 10; // FIXME
+      "*": {
+        async getattr() {
+          return {
+            st_mode: unix.S_IFREG | 0444,
+            st_nlink: 1,
+            st_size: 10 // FIXME
+          };
+        }
+      }
+    }
+  }
+};
 
+function findRoute(path) {
+  let route = router;
+  for (let segment of path.split("/")) {
+    if (segment === "") continue;
+    route = route[segment] || route["*"];
+  }
+  return route;
+}
+
+async function readdir(path) {
+  let route = findRoute(path);
+
+  if (route.readdir) {
+    return route.readdir();
+  }
+  return Object.keys(route);
+}
+
+async function getattr(path) {
+  let route = findRoute(path);
+
+  if (route.getattr) {
+    return route.getattr();
   } else {
-    response.error = unix.ENOENT;
+    return {
+      st_mode: unix.S_IFDIR | 0755,
+      st_nlink: 3
+    };
   }
-  return response;
+  /* 
+   * const response = {};
+   * if (path === "/" || path === "/tabs" || path === "/tabs/by-title" || path === "/tabs/by-id") {
+   *   response.st_mode = unix.S_IFDIR | 0755;
+   *   response.st_nlink = 3;
+
+   * } else if (path === "/tabs/hello.txt") {
+   *  
+   * } else {
+   *   response.error = unix.ENOENT;
+   * }
+   * return response;*/
 }
 
-ws.onmessage = function(event) {
+ws.onmessage = async function(event) {
   const req = JSON.parse(event.data);
   console.log('req', Object.entries(ops).find(([op, opcode]) => opcode === req.op)[0], req);
 
@@ -58,7 +100,7 @@ ws.onmessage = function(event) {
   if (req.op === ops.READDIR) {
     response = {
       op: ops.READDIR,
-      entries: [".", "..", ...readdir(req.path)]
+      entries: [".", "..", ...(await readdir(req.path))]
     };
 
   } else if (req.op === ops.GETATTR) {
@@ -67,7 +109,7 @@ ws.onmessage = function(event) {
       st_mode: 0,
       st_nlink: 0,
       st_size: 0,
-      ...getattr(req.path)
+      ...(await getattr(req.path))
     };
   }
 
