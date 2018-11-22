@@ -28,3 +28,12 @@ hello: hello.c
 clean:
 	rm -f $(TARGETS) *.o
 	rm -rf *.dSYM
+
+remount: unmount mount
+
+unmount:
+	killall -9 hello || true
+	diskutil unmount force mnt || true
+
+mount: hello
+	./hello -s -f mnt
