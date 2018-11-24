@@ -20,15 +20,6 @@ struct wby_con *con = NULL;
 pthread_mutex_t request_data_mutex = PTHREAD_MUTEX_INITIALIZER;
 char *request_data = NULL;
 
-enum opcode {
-    NONE = 0,
-
-    GETATTR,
-    OPEN,
-    READDIR,
-    READ
-};
-
 pthread_cond_t response_cv = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t response_mutex = PTHREAD_MUTEX_INITIALIZER;
 cJSON *response = NULL;
@@ -88,7 +79,7 @@ static cJSON *await_response() {
     if (disconnected) { ret = -EIO; goto done; }        \
     \
     req = cJSON_CreateObject(); \
-    cJSON_AddNumberToObject(req, "op", (int) op);        \
+    cJSON_AddStringToObject(req, "op", op);        \
     req_body \
     \
     dispatch_send_req(req); \
@@ -101,9 +92,9 @@ static cJSON *await_response() {
       if (ret != 0) goto done; \
     } \
     \
+    ret = -1; \
     resp_handler \
     \
-    ret = 0; \
 done: \
     if (req != NULL) cJSON_Delete(req); \
     if (resp != NULL) cJSON_Delete(resp); \
@@ -121,25 +112,29 @@ hello_getattr(const char *path, struct stat *stbuf)
     memset(stbuf, 0, sizeof(struct stat));
     printf("\n\ngetattr(%s)\n", path);
 
-    MAKE_REQ(GETATTR, {
+    MAKE_REQ("getattr", {
         cJSON_AddStringToObject(req, "path", path);
     }, {
         JSON_GET_PROP_INT(stbuf->st_mode, "st_mode");
         JSON_GET_PROP_INT(stbuf->st_nlink, "st_nlink");
         JSON_GET_PROP_INT(stbuf->st_size, "st_size");
         printf("returning re getattr(%s)\n", path);
+
+        ret = 0;
     });
 }
 
 static int
 hello_open(const char *path, struct fuse_file_info *fi)
 {
-    MAKE_REQ(OPEN, {
+    MAKE_REQ("open", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
     }, {
         cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh");
         if (fh_item) fi->fh = fh_item->valueint;
+
+        ret = 0;
     });
 }
 
@@ -149,8 +144,8 @@ hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 {
     printf("\n\nreaddir(%s)\n", path);
     
-    // send {op: READDIR, path} to the websocket handler
-    MAKE_REQ(READDIR, {
+    // send {op: "readdir", path} to the websocket handler
+    MAKE_REQ("readdir", {
         cJSON_AddStringToObject(req, "path", path);
     }, {
         cJSON *entries = cJSON_GetObjectItemCaseSensitive(resp, "entries");
@@ -159,6 +154,8 @@ hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             filler(buf, cJSON_GetStringValue(entry), NULL, 0);
             printf("entry: [%s]\n", cJSON_GetStringValue(entry));
         }
+
+        ret = 0;
     });
 }
 
@@ -166,7 +163,7 @@ static int
 hello_read(const char *path, char *buf, size_t size, off_t offset,
            struct fuse_file_info *fi)
 {
-    MAKE_REQ(OPEN, {
+    MAKE_REQ("read", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "size", size);
         cJSON_AddNumberToObject(req, "offset", offset);
@@ -174,27 +171,35 @@ hello_read(const char *path, char *buf, size_t size, off_t offset,
         cJSON_AddNumberToObject(req, "fh", fi->fh);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
     }, {
-        
+        size_t resp_size;
+        JSON_GET_PROP_INT(resp_size, "size");
+        size = resp_size < size ? resp_size : size;
+
+        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
+        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
+        size_t resp_buf_len = strlen(resp_buf);
+        size = resp_buf_len < size ? resp_buf_len : size;
+
+        memcpy(buf, resp_buf, size);
+
+        ret = size;
     });
+}
 
-    if (strcmp(path, file_path) != 0)
-        return -ENOENT;
-
-    if (offset >= file_size) /* Trying to read past the end of file. */
-        return 0;
-
-    if (offset + size > file_size) /* Trim the read to the file size. */
-        size = file_size - offset;
-
-    memcpy(buf, file_content + offset, size); /* Provide the content. */
-
-    return size;
+static int hello_release(const char *path, struct fuse_file_info *fi) {
+    MAKE_REQ("release", {
+        cJSON_AddStringToObject(req, "path", path);
+        cJSON_AddNumberToObject(req, "fh", fi->fh);
+    }, {
+        ret = 0;
+    });
 }
 
 static struct fuse_operations hello_filesystem_operations = {
     .getattr = hello_getattr, /* To provide size, permissions, etc. */
     .open    = hello_open,    /* To enforce read-only access.       */
     .read    = hello_read,    /* To provide file content.           */
+    .release = hello_release,
     .readdir = hello_readdir, /* To provide directory listing.      */
 };
 

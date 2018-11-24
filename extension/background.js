@@ -1,14 +1,5 @@
 const ws = new WebSocket("ws://localhost:8888");
 
-const ops = {
-  NONE: 0,
-
-  GETATTR: 1,
-  OPEN: 2,
-  READDIR: 3,
-  READ: 4
-};
-
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -34,8 +25,49 @@ function UnixError(error) {
 }
 UnixError.prototype = Error.prototype;
 
+function getTab(id) {
+  return new Promise((resolve, reject) => chrome.tabs.get(id, resolve));
+}
 function queryTabs() {
   return new Promise((resolve, reject) => chrome.tabs.query({}, resolve));
+}
+
+function sendDebuggerCommand(tab, method, commandParams) {
+  return new Promise(resolve => chrome.debugger.sendCommand({tabId: id}, method, commandParams, resolve));
+}
+
+const fhManager = (function() {
+  const handles = {};
+  let nextFh = 0;
+  return {
+    allocate(obj) { // -> fh
+      const fh = nextFh++;
+      handles[fh] = obj;
+      return fh;
+    },
+    ref(fh) {
+      if (!handles[fh]) throw new UnixError(unix.EIO);
+      return handles[fh];
+    },
+    free(fh) {
+      delete handles[fh];
+    }
+  };
+})();
+
+// tabs/by-id/ID/title
+// tabs/by-id/ID/url
+// tabs/by-id/ID/console
+// tabs/by-id/ID/mem (?)
+// tabs/by-id/ID/cpu (?)
+// tabs/by-id/ID/screenshot.png
+// tabs/by-id/ID/printed.pdf
+// tabs/by-id/ID/control
+// tabs/by-id/ID/sources/
+
+function pathComponent(path, i) {
+  const components = path.split('/');
+  return components[i >= 0 ? i : components.length + i];
 }
 
 const router = {
@@ -47,13 +79,34 @@ const router = {
       },
 
       "*": {
-        async getattr() {
-          return {
-            st_mode: unix.S_IFREG | 0444,
-            st_nlink: 1,
-            st_size: 10 // FIXME
-          };
-        }
+        "url": {
+          async getattr() {
+            return {
+              st_mode: unix.S_IFREG | 0444,
+              st_nlink: 1,
+              st_size: 100 // FIXME
+            };
+          },
+          async open(path) {
+            return fhManager.allocate(await getTab(parseInt(pathComponent(path, -2))));
+          },
+          async read(path, fh, size, offset) {
+            const tab = fhManager.ref(fh);
+            return tab.url.substr(offset, size);
+          },
+          async release(path, fh) {
+            fhManager.free(fh);
+          }
+        },
+        /* "title": fileFromProperty('title'),
+         * "sources": folderFromResource(
+         *   (tab, path) => new Promise(resolve => chrome.debugger.attach(
+         *     { tabId: tab.id }, "1-3", resolve)),
+         *   {
+         *     readdir() {
+
+         *     }
+         *   }*/
       }
     }
   }
@@ -73,7 +126,7 @@ function findRoute(path) {
 async function getattr(path) {
   let route = findRoute(path);
   if (route.getattr) {
-    return route.getattr();
+    return route.getattr(path);
   } else {
     return {
       st_mode: unix.S_IFDIR | 0755,
@@ -84,39 +137,62 @@ async function getattr(path) {
 
 async function readdir(path) {
   let route = findRoute(path);
-  if (route.readdir) {
-    return route.readdir();
-  }
+  if (route.readdir) return route.readdir(path);
   return Object.keys(route);
+}
+
+async function open(path) {
+  let route = findRoute(path);
+  if (route.open) return route.open(path);
+}
+
+async function read(path, fh, size, offset) {
+  let route = findRoute(path);
+  if (route.read) return route.read(path, fh, size, offset);
+}
+
+async function release(path, fh) {
+  let route = findRoute(path);
+  if (route.read) return route.release(path, fh);
 }
 
 ws.onmessage = async function(event) {
   const req = JSON.parse(event.data);
-  console.log('req', Object.entries(ops).find(([op, opcode]) => opcode === req.op)[0], req);
 
   let response = { op: req.op, error: unix.EIO };
   try {
-    if (req.op === ops.GETATTR) {
+    if (req.op === 'getattr') {
       response = {
-        op: ops.GETATTR,
+        op: 'getattr',
         st_mode: 0,
         st_nlink: 0,
         st_size: 0,
         ...(await getattr(req.path))
       };
-    } else if (req.op === ops.OPEN) {
-      throw new UnixError(unix.EIO);
-
-    } else if (req.op === ops.READDIR) {
+    } else if (req.op === 'open') {
       response = {
-        op: ops.READDIR,
+        op: 'open',
+        fh: await open(req.path)
+      };
+
+    } else if (req.op === 'readdir') {
+      response = {
+        op: 'readdir',
         entries: [".", "..", ...(await readdir(req.path))]
       };
 
-    } else if (req.op === ops.READ) {
+    } else if (req.op === 'read') {
+      const buf = await read(req.path, req.fh, req.size, req.offset)
       response = {
-        op: ops.READ,
-        buf: await read(req.path)
+        op: 'read',
+        buf,
+        size: buf.length
+      };
+
+    } else if (req.op === 'release') {
+      await release(req.path, req.fh);
+      response = {
+        op: 'release'
       };
     }
 
@@ -127,6 +203,5 @@ ws.onmessage = async function(event) {
     }
   }
 
-  console.log('response', Object.entries(ops).find(([op, opcode]) => opcode === response.op)[0], response);
   ws.send(JSON.stringify(response));
 };
