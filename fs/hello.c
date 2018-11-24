@@ -29,8 +29,11 @@ enum request_response_state {
 
 struct request_response {
   enum request_response_state state;
+
   char *request;
   cJSON *response;
+
+  clock_t start;
 };
 
 #define REQUEST_RESPONSE_QUEUE_SIZE 128
@@ -54,8 +57,9 @@ static request_id enqueue_request(cJSON *req) {
   queue[id].state = SEND_REQUEST;
   queue[id].request = cJSON_Print(req);
   queue[id].response = NULL;
+  queue[id].start = clock();
 
-  printf("%s\n", queue[id].request);
+  /* printf("%s\n", queue[id].request); */
 
   pthread_mutex_unlock(&queue_mutex);
 
@@ -95,6 +99,8 @@ static cJSON *await_response(request_id id) {
   cJSON *resp = queue[id].response;
   queue[id].state = EMPTY;
   queue[id].response = NULL;
+
+  /* printf("Elapsed: %f seconds\n", (double)(clock() - queue[id].start) / CLOCKS_PER_SEC); */
 
   pthread_mutex_unlock(&queue_mutex);
 
@@ -143,7 +149,6 @@ static int
 hello_getattr(const char *path, struct stat *stbuf)
 {
     memset(stbuf, 0, sizeof(struct stat));
-    printf("\n\ngetattr(%s)\n", path);
 
     MAKE_REQ("getattr", {
         cJSON_AddStringToObject(req, "path", path);
@@ -151,7 +156,6 @@ hello_getattr(const char *path, struct stat *stbuf)
         JSON_GET_PROP_INT(stbuf->st_mode, "st_mode");
         JSON_GET_PROP_INT(stbuf->st_nlink, "st_nlink");
         JSON_GET_PROP_INT(stbuf->st_size, "st_size");
-        printf("returning re getattr(%s)\n", path);
 
         ret = 0;
     });
@@ -175,8 +179,6 @@ static int
 hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
               off_t offset, struct fuse_file_info *fi)
 {
-    printf("\n\nreaddir(%s)\n", path);
-    
     // send {op: "readdir", path} to the websocket handler
     MAKE_REQ("readdir", {
         cJSON_AddStringToObject(req, "path", path);
@@ -185,7 +187,6 @@ hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         cJSON *entry;
         cJSON_ArrayForEach(entry, entries) {
             filler(buf, cJSON_GetStringValue(entry), NULL, 0);
-            printf("entry: [%s]\n", cJSON_GetStringValue(entry));
         }
 
         ret = 0;
@@ -265,11 +266,11 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
     unsigned char data[131072] = {0};
 
     int i = 0;
-    printf("WebSocket frame incoming\n");
-    printf("  Frame OpCode: %d\n", frame->opcode);
-    printf("  Final frame?: %s\n", (frame->flags & WBY_WSF_FIN) ? "yes" : "no");
-    printf("  Masked?     : %s\n", (frame->flags & WBY_WSF_MASKED) ? "yes" : "no");
-    printf("  Data Length : %d\n", (int) frame->payload_length);
+    /* printf("WebSocket frame incoming\n"); */
+    /* printf("  Frame OpCode: %d\n", frame->opcode); */
+    /* printf("  Final frame?: %s\n", (frame->flags & WBY_WSF_FIN) ? "yes" : "no"); */
+    /* printf("  Masked?     : %s\n", (frame->flags & WBY_WSF_MASKED) ? "yes" : "no"); */
+    /* printf("  Data Length : %d\n", (int) frame->payload_length); */
 
     if ((unsigned long) frame->payload_length > sizeof(data)) {
         printf("Data too long!\n");
@@ -282,17 +283,17 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
         size_t read_size = remain > (int) sizeof buffer ? sizeof buffer : (size_t) remain;
         size_t k;
 
-        printf("%08x ", (int) i);
+        /* printf("%08x ", (int) i); */
         if (0 != wby_read(connection, buffer, read_size))
             break;
-        for (k = 0; k < read_size; ++k)
-            printf("%02x ", buffer[k]);
-        for (k = read_size; k < 16; ++k)
-            printf("   ");
-        printf(" | ");
-        for (k = 0; k < read_size; ++k)
-            printf("%c", isprint(buffer[k]) ? buffer[k] : '?');
-        printf("\n");
+        /* for (k = 0; k < read_size; ++k) */
+        /*     printf("%02x ", buffer[k]); */
+        /* for (k = read_size; k < 16; ++k) */
+        /*     printf("   "); */
+        /* printf(" | "); */
+        /* for (k = 0; k < read_size; ++k) */
+        /*     printf("%c", isprint(buffer[k]) ? buffer[k] : '?'); */
+        /* printf("\n"); */
         for (k = 0; k < read_size; ++k)
           data[i + k] = buffer[k];
         i += (int)read_size;
@@ -313,7 +314,7 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
     request_id id = id_item->valueint;
 
     pthread_mutex_lock(&queue_mutex);
-    printf("got resp");
+
     if (queue[id].state != RECEIVE_RESPONSE) {
       printf("Got response to request in wrong state!\n");
       exit(1);
@@ -337,7 +338,7 @@ websocket_closed(struct wby_con *connection, void *userdata)
 static void
 test_log(const char* text)
 {
-    printf("[debug] %s\n", text);
+    /* printf("[debug] %s\n", text); */
 }
 
 void *websocket_main(void *threadid)

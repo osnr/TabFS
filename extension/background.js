@@ -88,25 +88,31 @@ const router = {
             };
           },
           async open(path) {
-            return fhManager.allocate(await getTab(parseInt(pathComponent(path, -2))));
+            return 0;
           },
           async read(path, fh, size, offset) {
-            const tab = fhManager.ref(fh);
-            return tab.url.substr(offset, size);
+            const tab = await getTab(parseInt(pathComponent(path, -2)));
+            return (tab.url + "\n").substr(offset, size);
           },
-          async release(path, fh) {
-            fhManager.free(fh);
-          }
+          async release(path, fh) {}
         },
-        /* "title": fileFromProperty('title'),
-         * "sources": folderFromResource(
-         *   (tab, path) => new Promise(resolve => chrome.debugger.attach(
-         *     { tabId: tab.id }, "1-3", resolve)),
-         *   {
-         *     readdir() {
-
-         *     }
-         *   }*/
+        "title": {
+          async getattr() {
+            return {
+              st_mode: unix.S_IFREG | 0444,
+              st_nlink: 1,
+              st_size: 1000 // FIXME
+            };
+          },
+          async open(path) {
+            return 0;
+          },
+          async read(path, fh, size, offset) {
+            const tab = await getTab(parseInt(pathComponent(path, -2)));
+            return (tab.title + "\n").substr(offset, size);
+          },
+          async release(path, fh) {}
+        },
       }
     }
   }
@@ -160,7 +166,7 @@ ws.onmessage = async function(event) {
   const req = JSON.parse(event.data);
 
   let response = { op: req.op, error: unix.EIO };
-  console.time(req.op + ':' + req.path);
+  /* console.time(req.op + ':' + req.path);*/
   try {
     if (req.op === 'getattr') {
       response = {
@@ -202,7 +208,7 @@ ws.onmessage = async function(event) {
       error: e instanceof UnixError ? e.error : unix.EIO
     }
   }
-  console.timeEnd(req.op + ':' + req.path);
+  /* console.timeEnd(req.op + ':' + req.path);*/
 
   response.id = req.id;
   ws.send(JSON.stringify(response));
