@@ -160,6 +160,7 @@ ws.onmessage = async function(event) {
   const req = JSON.parse(event.data);
 
   let response = { op: req.op, error: unix.EIO };
+  console.time(req.op + ':' + req.path);
   try {
     if (req.op === 'getattr') {
       response = {
@@ -195,13 +196,14 @@ ws.onmessage = async function(event) {
         op: 'release'
       };
     }
-
   } catch (e) {
     response = {
       op: req.op,
       error: e instanceof UnixError ? e.error : unix.EIO
     }
   }
+  console.timeEnd(req.op + ':' + req.path);
 
+  response.id = req.id;
   ws.send(JSON.stringify(response));
 };
