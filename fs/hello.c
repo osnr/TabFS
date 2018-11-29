@@ -14,6 +14,8 @@
 #include "cJSON/cJSON.h"
 #include "cJSON/cJSON.c"
 
+#define DEBUG(...)
+
 struct wby_server server;
 struct wby_con *con = NULL;
 
@@ -205,10 +207,6 @@ hello_read(const char *path, char *buf, size_t size, off_t offset,
         cJSON_AddNumberToObject(req, "fh", fi->fh);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
     }, {
-        size_t resp_size;
-        JSON_GET_PROP_INT(resp_size, "size");
-        size = resp_size < size ? resp_size : size;
-
         cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
         char *resp_buf = cJSON_GetStringValue(resp_buf_item);
         size_t resp_buf_len = strlen(resp_buf);
@@ -266,11 +264,11 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
     unsigned char data[131072] = {0};
 
     int i = 0;
-    /* printf("WebSocket frame incoming\n"); */
-    /* printf("  Frame OpCode: %d\n", frame->opcode); */
-    /* printf("  Final frame?: %s\n", (frame->flags & WBY_WSF_FIN) ? "yes" : "no"); */
-    /* printf("  Masked?     : %s\n", (frame->flags & WBY_WSF_MASKED) ? "yes" : "no"); */
-    /* printf("  Data Length : %d\n", (int) frame->payload_length); */
+    DEBUG("WebSocket frame incoming\n");
+    DEBUG("  Frame OpCode: %d\n", frame->opcode);
+    DEBUG("  Final frame?: %s\n", (frame->flags & WBY_WSF_FIN) ? "yes" : "no");
+    DEBUG("  Masked?     : %s\n", (frame->flags & WBY_WSF_MASKED) ? "yes" : "no");
+    DEBUG("  Data Length : %d\n", (int) frame->payload_length);
 
     if ((unsigned long) frame->payload_length > sizeof(data)) {
         printf("Data too long!\n");
@@ -283,17 +281,17 @@ websocket_frame(struct wby_con *connection, const struct wby_frame *frame, void 
         size_t read_size = remain > (int) sizeof buffer ? sizeof buffer : (size_t) remain;
         size_t k;
 
-        /* printf("%08x ", (int) i); */
+        DEBUG("%08x ", (int) i);
         if (0 != wby_read(connection, buffer, read_size))
             break;
-        /* for (k = 0; k < read_size; ++k) */
-        /*     printf("%02x ", buffer[k]); */
-        /* for (k = read_size; k < 16; ++k) */
-        /*     printf("   "); */
-        /* printf(" | "); */
-        /* for (k = 0; k < read_size; ++k) */
-        /*     printf("%c", isprint(buffer[k]) ? buffer[k] : '?'); */
-        /* printf("\n"); */
+        for (k = 0; k < read_size; ++k)
+            DEBUG("%02x ", buffer[k]);
+        for (k = read_size; k < 16; ++k)
+            DEBUG("   ");
+        DEBUG(" | ");
+        for (k = 0; k < read_size; ++k)
+            DEBUG("%c", isprint(buffer[k]) ? buffer[k] : '?');
+        DEBUG("\n");
         for (k = 0; k < read_size; ++k)
           data[i + k] = buffer[k];
         i += (int)read_size;
@@ -338,7 +336,7 @@ websocket_closed(struct wby_con *connection, void *userdata)
 static void
 test_log(const char* text)
 {
-    /* printf("[debug] %s\n", text); */
+    DEBUG("[debug] %s\n", text);
 }
 
 void *websocket_main(void *threadid)

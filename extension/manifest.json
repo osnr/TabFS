@@ -7,6 +7,8 @@
 
   "permissions": ["tabs", "debugger"],
 
+  "browser_action": {},
+  
   "background": {
     "scripts": ["background.js"],
     "persistent": true

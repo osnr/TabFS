@@ -1,4 +1,24 @@
-const ws = new WebSocket("ws://localhost:8888");
+let ws;
+function tryConnect() {
+  ws = new WebSocket("ws://localhost:8888");
+  updateToolbarIcon();
+  ws.onopen = ws.onclose = updateToolbarIcon;
+}
+
+function updateToolbarIcon() {
+  if (ws && ws.readyState == 1) { // OPEN
+    chrome.browserAction.setBadgeBackgroundColor({color: 'blue'});
+    chrome.browserAction.setBadgeText({text: 'f'});
+  } else {
+    chrome.browserAction.setBadgeBackgroundColor({color: 'red'});
+    chrome.browserAction.setBadgeText({text: '!'});
+  }
+}
+
+tryConnect();
+chrome.browserAction.onClicked.addListener(function() {
+  tryConnect();
+});
 
 const unix = {
   EPERM: 1,
@@ -61,6 +81,7 @@ const fhManager = (function() {
 // tabs/by-id/ID/mem (?)
 // tabs/by-id/ID/cpu (?)
 // tabs/by-id/ID/screenshot.png
+// tabs/by-id/ID/text.txt
 // tabs/by-id/ID/printed.pdf
 // tabs/by-id/ID/control
 // tabs/by-id/ID/sources/
@@ -80,38 +101,16 @@ const router = {
 
       "*": {
         "url": {
-          async getattr() {
-            return {
-              st_mode: unix.S_IFREG | 0444,
-              st_nlink: 1,
-              st_size: 100 // FIXME
-            };
-          },
-          async open(path) {
-            return 0;
-          },
           async read(path, fh, size, offset) {
             const tab = await getTab(parseInt(pathComponent(path, -2)));
             return (tab.url + "\n").substr(offset, size);
-          },
-          async release(path, fh) {}
+          }
         },
         "title": {
-          async getattr() {
-            return {
-              st_mode: unix.S_IFREG | 0444,
-              st_nlink: 1,
-              st_size: 1000 // FIXME
-            };
-          },
-          async open(path) {
-            return 0;
-          },
           async read(path, fh, size, offset) {
             const tab = await getTab(parseInt(pathComponent(path, -2)));
             return (tab.title + "\n").substr(offset, size);
-          },
-          async release(path, fh) {}
+          }
         },
       }
     }
@@ -133,7 +132,15 @@ async function getattr(path) {
   let route = findRoute(path);
   if (route.getattr) {
     return route.getattr(path);
+  } else if (route.read) {
+    // default file attrs
+    return {
+      st_mode: unix.S_IFREG | 0444,
+      st_nlink: 1,
+      st_size: 100 // FIXME
+    };
   } else {
+    // default dir attrs
     return {
       st_mode: unix.S_IFDIR | 0755,
       st_nlink: 3
@@ -150,6 +157,7 @@ async function readdir(path) {
 async function open(path) {
   let route = findRoute(path);
   if (route.open) return route.open(path);
+  else return 0; // empty fd
 }
 
 async function read(path, fh, size, offset) {
@@ -159,7 +167,7 @@ async function read(path, fh, size, offset) {
 
 async function release(path, fh) {
   let route = findRoute(path);
-  if (route.read) return route.release(path, fh);
+  if (route.release) return route.release(path, fh);
 }
 
 ws.onmessage = async function(event) {
@@ -192,8 +200,7 @@ ws.onmessage = async function(event) {
       const buf = await read(req.path, req.fh, req.size, req.offset)
       response = {
         op: 'read',
-        buf,
-        size: buf.length
+        buf
       };
 
     } else if (req.op === 'release') {
