@@ -63,6 +63,7 @@ static request_id enqueue_request(cJSON *req) {
 
   /* printf("%s\n", queue[id].request); */
 
+  pthread_cond_signal(&queue_cv);
   pthread_mutex_unlock(&queue_mutex);
 
   return id;
@@ -164,9 +165,77 @@ hello_getattr(const char *path, struct stat *stbuf)
 }
 
 static int
+hello_readlink(const char *path, char *buf, size_t size)
+{
+    MAKE_REQ("readlink", {
+        cJSON_AddStringToObject(req, "path", path);
+    }, {
+        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
+        // FIXME: fix
+        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
+        size_t resp_buf_len = strlen(resp_buf);
+        size = resp_buf_len < size ? resp_buf_len : size;
+
+        memcpy(buf, resp_buf, size);
+
+        ret = size;
+    });
+}
+
+static int
 hello_open(const char *path, struct fuse_file_info *fi)
 {
     MAKE_REQ("open", {
+        cJSON_AddStringToObject(req, "path", path);
+        cJSON_AddNumberToObject(req, "flags", fi->flags);
+    }, {
+        cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh");
+        if (fh_item) fi->fh = fh_item->valueint;
+
+        ret = 0;
+    });
+}
+
+static int
+hello_read(const char *path, char *buf, size_t size, off_t offset,
+           struct fuse_file_info *fi)
+{
+    MAKE_REQ("read", {
+        cJSON_AddStringToObject(req, "path", path);
+        cJSON_AddNumberToObject(req, "size", size);
+        cJSON_AddNumberToObject(req, "offset", offset);
+
+        cJSON_AddNumberToObject(req, "fh", fi->fh);
+        cJSON_AddNumberToObject(req, "flags", fi->flags);
+    }, {
+        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
+        if (!resp_buf_item) return -EIO;
+
+        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
+        if (!resp_buf) return -EIO;
+
+        size_t resp_buf_len = strlen(resp_buf);
+        size = resp_buf_len < size ? resp_buf_len : size;
+
+        memcpy(buf, resp_buf, size);
+
+        ret = size;
+    });
+}
+
+static int hello_release(const char *path, struct fuse_file_info *fi) {
+    MAKE_REQ("release", {
+        cJSON_AddStringToObject(req, "path", path);
+        cJSON_AddNumberToObject(req, "fh", fi->fh);
+    }, {
+        ret = 0;
+    });
+}
+
+static int
+hello_opendir(const char *path, struct fuse_file_info *fi)
+{
+    MAKE_REQ("opendir", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
     }, {
@@ -196,30 +265,9 @@ hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 }
 
 static int
-hello_read(const char *path, char *buf, size_t size, off_t offset,
-           struct fuse_file_info *fi)
+hello_releasedir(const char *path, struct fuse_file_info *fi)
 {
-    MAKE_REQ("read", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "size", size);
-        cJSON_AddNumberToObject(req, "offset", offset);
-
-        cJSON_AddNumberToObject(req, "fh", fi->fh);
-        cJSON_AddNumberToObject(req, "flags", fi->flags);
-    }, {
-        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
-        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
-        size_t resp_buf_len = strlen(resp_buf);
-        size = resp_buf_len < size ? resp_buf_len : size;
-
-        memcpy(buf, resp_buf, size);
-
-        ret = size;
-    });
-}
-
-static int hello_release(const char *path, struct fuse_file_info *fi) {
-    MAKE_REQ("release", {
+    MAKE_REQ("releasedir", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "fh", fi->fh);
     }, {
@@ -228,11 +276,15 @@ static int hello_release(const char *path, struct fuse_file_info *fi) {
 }
 
 static struct fuse_operations hello_filesystem_operations = {
-    .getattr = hello_getattr, /* To provide size, permissions, etc. */
-    .open    = hello_open,    /* To enforce read-only access.       */
-    .read    = hello_read,    /* To provide file content.           */
-    .release = hello_release,
-    .readdir = hello_readdir, /* To provide directory listing.      */
+    .getattr  = hello_getattr, /* To provide size, permissions, etc. */
+    .readlink = hello_readlink,
+    .open     = hello_open,    /* To enforce read-only access.       */
+    .read     = hello_read,    /* To provide file content.           */
+    .release  = hello_release,
+
+    .opendir  = hello_opendir,
+    .readdir  = hello_readdir, /* To provide directory listing.      */
+    .releasedir = hello_releasedir
 };
 
 static int
@@ -339,6 +391,24 @@ test_log(const char* text)
     DEBUG("[debug] %s\n", text);
 }
 
+int check_io_demand() {
+  if (con == NULL) return 1;
+
+  for (request_id id = 0; id < REQUEST_RESPONSE_QUEUE_SIZE; id++) {
+    if (queue[id].state == SEND_REQUEST || queue[id].state == RECEIVE_RESPONSE) {
+      return 1;
+    }
+  }
+  return 0;
+}
+void await_io_demand() {
+  pthread_mutex_lock(&queue_mutex);
+  while (!check_io_demand()) {
+    pthread_cond_wait(&queue_cv, &queue_mutex);
+  }
+  pthread_mutex_unlock(&queue_mutex);
+}
+
 void *websocket_main(void *threadid)
 {
     void *memory = NULL;
@@ -365,6 +435,8 @@ void *websocket_main(void *threadid)
 
     printf("Awaiting WebSocket connection from Chrome extension.\n");
     for (;;) {
+        await_io_demand();
+
         send_any_enqueued_requests();
 
         wby_update(&server);
@@ -384,5 +456,4 @@ main(int argc, char **argv)
     pthread_t websocket_thread;
     pthread_create(&websocket_thread, NULL, websocket_main, NULL);
     return fuse_main(argc, argv, &hello_filesystem_operations, NULL);
-
 }

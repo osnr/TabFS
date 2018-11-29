@@ -1,25 +1,3 @@
-let ws;
-function tryConnect() {
-  ws = new WebSocket("ws://localhost:8888");
-  updateToolbarIcon();
-  ws.onopen = ws.onclose = updateToolbarIcon;
-}
-
-function updateToolbarIcon() {
-  if (ws && ws.readyState == 1) { // OPEN
-    chrome.browserAction.setBadgeBackgroundColor({color: 'blue'});
-    chrome.browserAction.setBadgeText({text: 'f'});
-  } else {
-    chrome.browserAction.setBadgeBackgroundColor({color: 'red'});
-    chrome.browserAction.setBadgeText({text: '!'});
-  }
-}
-
-tryConnect();
-chrome.browserAction.onClicked.addListener(function() {
-  tryConnect();
-});
-
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -93,6 +71,13 @@ function pathComponent(path, i) {
 
 const router = {
   "tabs": {
+    /* "last-focused": {
+     *   // FIXME: symlink to tab by id.
+     *   async readlink() {
+     *     return "../windows/last-focused/selected-tab"
+     *   }
+     * },
+     */
     "by-id": {
       async readdir() {
         const tabs = await queryTabs();
@@ -112,6 +97,21 @@ const router = {
             return (tab.title + "\n").substr(offset, size);
           }
         },
+        "tree": {
+          async open(path) {
+            const debuggee = {tabId: parseInt(pathComponent(path, -2))};
+            await new Promise(resolve => chrome.debugger.attach(debuggee, "1.2", resolve));
+            chrome.debugger.sendCommand(debuggee, "Page.getResourceTree", {}, function(result) {
+              console.log(result);
+            });
+          },
+          async read(path) {
+
+          },
+          async close(path) {
+
+          }
+        }
       }
     }
   }
@@ -148,16 +148,10 @@ async function getattr(path) {
   }
 }
 
-async function readdir(path) {
-  let route = findRoute(path);
-  if (route.readdir) return route.readdir(path);
-  return Object.keys(route);
-}
-
 async function open(path) {
   let route = findRoute(path);
   if (route.open) return route.open(path);
-  else return 0; // empty fd
+  else return 0; // empty fh
 }
 
 async function read(path, fh, size, offset) {
@@ -170,7 +164,23 @@ async function release(path, fh) {
   if (route.release) return route.release(path, fh);
 }
 
-ws.onmessage = async function(event) {
+async function opendir(path) {
+  let route = findRoute(path);
+  if (route.opendir) return route.opendir(path);
+  else return 0; // empty fh
+}
+async function readdir(path) {
+  let route = findRoute(path);
+  if (route.readdir) return route.readdir(path);
+  return Object.keys(route);
+}
+async function releasedir(path) {
+  let route = findRoute(path);
+  if (route.releasedir) return route.releasedir(path);
+}
+
+let ws;
+async function onmessage(event) {
   const req = JSON.parse(event.data);
 
   let response = { op: req.op, error: unix.EIO };
@@ -190,12 +200,6 @@ ws.onmessage = async function(event) {
         fh: await open(req.path)
       };
 
-    } else if (req.op === 'readdir') {
-      response = {
-        op: 'readdir',
-        entries: [".", "..", ...(await readdir(req.path))]
-      };
-
     } else if (req.op === 'read') {
       const buf = await read(req.path, req.fh, req.size, req.offset)
       response = {
@@ -208,6 +212,22 @@ ws.onmessage = async function(event) {
       response = {
         op: 'release'
       };
+
+    } else if (req.op === 'opendir') {
+      response = {
+        op: 'opendir',
+        fh: await opendir(req.path)
+      };
+
+    } else if (req.op === 'readdir') {
+      response = {
+        op: 'readdir',
+        entries: [".", "..", ...(await readdir(req.path))]
+      };
+
+    } else if (req.op === 'releasedir') {
+      await releasedir(req.path, req.fh);
+      response = { op: 'releasedir' };
     }
   } catch (e) {
     response = {
@@ -220,3 +240,25 @@ ws.onmessage = async function(event) {
   response.id = req.id;
   ws.send(JSON.stringify(response));
 };
+
+function tryConnect() {
+  ws = new WebSocket("ws://localhost:8888");
+  updateToolbarIcon();
+  ws.onopen = ws.onclose = updateToolbarIcon;
+  ws.onmessage = onmessage;
+}
+
+function updateToolbarIcon() {
+  if (ws && ws.readyState == 1) { // OPEN
+    chrome.browserAction.setBadgeBackgroundColor({color: 'blue'});
+    chrome.browserAction.setBadgeText({text: 'f'});
+  } else {
+    chrome.browserAction.setBadgeBackgroundColor({color: 'red'});
+    chrome.browserAction.setBadgeText({text: '!'});
+  }
+}
+
+tryConnect();
+chrome.browserAction.onClicked.addListener(function() {
+  tryConnect();
+});
