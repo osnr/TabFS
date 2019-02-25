@@ -69,6 +69,8 @@ function pathComponent(path, i) {
   return components[i >= 0 ? i : components.length + i];
 }
 
+const debugged = {};
+
 const router = {
   "tabs": {
     /* "last-focused": {
@@ -98,18 +100,24 @@ const router = {
           }
         },
         "tree": {
-          async open(path) {
-            const debuggee = {tabId: parseInt(pathComponent(path, -2))};
-            await new Promise(resolve => chrome.debugger.attach(debuggee, "1.2", resolve));
-            chrome.debugger.sendCommand(debuggee, "Page.getResourceTree", {}, function(result) {
-              console.log(result);
-            });
+          async opendir(path) {
+            const tabId = parseInt(pathComponent(path, -2));
+            if (!debugged[tabId]) {
+              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.2", resolve));
+              debugged[tabId] = 0;
+            }
+            debugged[tabId] += 1;
+            return 0;
           },
-          async read(path) {
-
+          async readdir(path) {
+            const tabId = parseInt(pathComponent(path, -2));
+            if (!debugged[tabId]) throw new UnixError(unix.EIO);
+            const result = await new Promise(resolve => chrome.debugger.sendCommand({tabId}, "Page.getResourceTree", {}, resolve));
+            const frameTree = result.frameTree;
+            return frameTree.resources.map(r => String(r.contentSize));
           },
-          async close(path) {
-
+          async releasedir(path) {
+            return 0;
           }
         }
       }
@@ -182,6 +190,7 @@ async function releasedir(path) {
 let ws;
 async function onmessage(event) {
   const req = JSON.parse(event.data);
+  console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
@@ -238,6 +247,7 @@ async function onmessage(event) {
   /* console.timeEnd(req.op + ':' + req.path);*/
 
   response.id = req.id;
+  console.log('resp', response);
   ws.send(JSON.stringify(response));
 };
 

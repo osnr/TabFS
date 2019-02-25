@@ -1,4 +1,4 @@
-TARGETS = hello
+TARGETS = tabfs
 
 # Root for OSXFUSE includes and libraries
 OSXFUSE_ROOT = /usr/local
@@ -18,12 +18,10 @@ CFLAGS_EXTRA = -Wall -g $(CFLAGS)
 
 LIBS = -losxfuse
 
-.c:
-	$(CC) $(CFLAGS_OSXFUSE) $(CFLAGS_EXTRA) -o $@ $< $(LIBS)
-
 all: $(TARGETS)
 
-hello: hello.c
+tabfs: common.c ws.c tabfs.c
+	$(CC) $(CFLAGS_OSXFUSE) $(CFLAGS_EXTRA) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f $(TARGETS) *.o
@@ -33,5 +31,8 @@ unmount:
 	killall -9 hello || true
 	diskutil unmount force mnt || true
 
-mount: hello
-	./hello -odirect_io -f mnt
+mount: tabfs
+	./tabfs -odirect_io -s -f mnt
+
+debugmount: tabfs
+	lldb -- ./tabfs -odirect_io -s -f mnt
