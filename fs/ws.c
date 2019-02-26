@@ -37,20 +37,22 @@ static int fill_fd_set_with_ws_sockets(fd_set *read_fds, fd_set *write_fds, fd_s
 static void receive_tabfs_request_then_send_to_browser() {
     char *request_data = common_receive_tabfs_to_ws(fill_fd_set_with_ws_sockets);
     if (request_data == NULL) {
-        return;
+        goto done;
     }
 
     if (con == NULL) {
         common_send_ws_to_tabfs(NULL);
-        return;
+        goto done;
     }
 
     wby_frame_begin(con, WBY_WSOP_TEXT_FRAME);
     wby_write(con, request_data, strlen(request_data));
     wby_frame_end(con);
 
+ done:
     // Was allocated by sender (tabfs.c, send_request_then_await_response).
-    free(request_data);
+    if (request_data != NULL) { free(request_data); }
+    return;
 }
 
 static int

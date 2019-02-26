@@ -12,7 +12,8 @@
 #include "ws.h"
 
 static cJSON *send_request_then_await_response(cJSON *req) {
-    char *request_data = cJSON_Print(req); // Will be freed on ws side.
+    // Will be freed at receiver (ws.c, receive_tabfs_request_then_send_to_browser).
+    char *request_data = cJSON_Print(req);
     common_send_tabfs_to_ws(request_data);
 
     char *response_data = common_receive_ws_to_tabfs();
@@ -22,6 +23,7 @@ static cJSON *send_request_then_await_response(cJSON *req) {
     }
 
     cJSON *resp = cJSON_Parse((const char *) response_data);
+    // Was allocated by sender (ws.c, websocket_frame).
     free(response_data);
 
     return resp;

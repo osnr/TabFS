@@ -16,6 +16,10 @@ void common_init() {
     if (pipe(ws_to_tabfs)) exit(1);
 }
 
+// FIXME: we probably need memory fences here?? especially on
+// non-x86?? idk
+// see https://stackoverflow.com/questions/35837539/does-the-use-of-an-anonymous-pipe-introduce-a-memory-barrier-for-interthread-com
+
 void common_send_tabfs_to_ws(char *request_data) {
     write(tabfs_to_ws[1], &request_data, sizeof(request_data));
 }
