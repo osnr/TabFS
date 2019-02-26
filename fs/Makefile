@@ -28,7 +28,7 @@ clean:
 	rm -rf *.dSYM
 
 unmount:
-	killall -9 hello || true
+	killall -9 tabfs || true
 	diskutil unmount force mnt || true
 
 mount: tabfs
