@@ -12,56 +12,54 @@
 #include "ws.h"
 
 static cJSON *send_request_then_await_response(cJSON *req) {
-  char *request_data = cJSON_Print(req); // Will be freed on ws side.
-  common_send_tabfs_to_ws(request_data);
+    char *request_data = cJSON_Print(req); // Will be freed on ws side.
+    common_send_tabfs_to_ws(request_data);
 
-  char *response_data = common_receive_ws_to_tabfs();
-  if (response_data == NULL) {
-    // Connection is dead.
-    return cJSON_Parse("{ \"error\": 5 }");
-  }
+    char *response_data = common_receive_ws_to_tabfs();
+    if (response_data == NULL) {
+        // Connection is dead.
+        return cJSON_Parse("{ \"error\": 5 }");
+    }
 
-  cJSON *resp = cJSON_Parse((const char *) response_data);
-  free(response_data);
+    cJSON *resp = cJSON_Parse((const char *) response_data);
+    free(response_data);
 
-  return resp;
+    return resp;
 }
 
-#define MAKE_REQ(op, req_body, resp_handler) \
-  do { \
-    int ret = -1;                                     \
-    cJSON *req = NULL;                                \
-    cJSON *resp = NULL;                           \
-                                                  \
-    req = cJSON_CreateObject();                    \
-    cJSON_AddStringToObject(req, "op", op);        \
-    req_body                                       \
-                                                   \
-    resp = send_request_then_await_response(req); \
-    \
-    cJSON *error_item = cJSON_GetObjectItemCaseSensitive(resp, "error"); \
-    if (error_item) { \
-      ret = -error_item->valueint; \
-      if (ret != 0) goto done; \
-    } \
-    \
-    ret = -1; \
-    resp_handler \
-    \
-done: \
-    if (req != NULL) cJSON_Delete(req); \
-    if (resp != NULL) cJSON_Delete(resp); \
-    return ret;                               \
-  } while (0)
+#define MAKE_REQ(OP, REQ_BUILDER_BODY, RESP_HANDLER_BODY)       \
+    do {                                              \
+        int ret = -1;                                 \
+        cJSON *req = NULL;                                              \
+        cJSON *resp = NULL;                                             \
+                                                                        \
+        req = cJSON_CreateObject();                                     \
+        cJSON_AddStringToObject(req, "op", OP);                         \
+        REQ_BUILDER_BODY                                                \
+                                                                        \
+        resp = send_request_then_await_response(req);                   \
+                                                                        \
+        cJSON *error_item = cJSON_GetObjectItemCaseSensitive(resp, "error"); \
+        if (error_item) {                                               \
+            ret = -error_item->valueint;                                \
+            if (ret != 0) goto done;                                    \
+        }                                                               \
+                                                                        \
+        ret = -1;                                                       \
+        RESP_HANDLER_BODY                                               \
+                                                                        \
+    done:                                                       \
+        if (req != NULL) cJSON_Delete(req);                     \
+        if (resp != NULL) cJSON_Delete(resp);                       \
+        return ret;                                             \
+    } while (0)
 
-#define JSON_GET_PROP_INT(lvalue, key) \
-  do { \
-    lvalue = cJSON_GetObjectItemCaseSensitive(resp, key)->valueint;     \
-  } while (0)
+#define JSON_GET_PROP_INT(LVALUE, KEY) \
+    do { \
+        LVALUE = cJSON_GetObjectItemCaseSensitive(resp, KEY)->valueint;     \
+    } while (0)
 
-static int
-tabfs_getattr(const char *path, struct stat *stbuf)
-{
+static int tabfs_getattr(const char *path, struct stat *stbuf) {
     memset(stbuf, 0, sizeof(struct stat));
 
     MAKE_REQ("getattr", {
@@ -75,9 +73,7 @@ tabfs_getattr(const char *path, struct stat *stbuf)
     });
 }
 
-static int
-tabfs_readlink(const char *path, char *buf, size_t size)
-{
+static int tabfs_readlink(const char *path, char *buf, size_t size) {
     MAKE_REQ("readlink", {
         cJSON_AddStringToObject(req, "path", path);
     }, {
@@ -93,9 +89,7 @@ tabfs_readlink(const char *path, char *buf, size_t size)
     });
 }
 
-static int
-tabfs_open(const char *path, struct fuse_file_info *fi)
-{
+static int tabfs_open(const char *path, struct fuse_file_info *fi) {
     MAKE_REQ("open", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
@@ -109,8 +103,7 @@ tabfs_open(const char *path, struct fuse_file_info *fi)
 
 static int
 tabfs_read(const char *path, char *buf, size_t size, off_t offset,
-           struct fuse_file_info *fi)
-{
+           struct fuse_file_info *fi) {
     MAKE_REQ("read", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "size", size);
@@ -143,9 +136,7 @@ static int tabfs_release(const char *path, struct fuse_file_info *fi) {
     });
 }
 
-static int
-tabfs_opendir(const char *path, struct fuse_file_info *fi)
-{
+static int tabfs_opendir(const char *path, struct fuse_file_info *fi) {
     MAKE_REQ("opendir", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "flags", fi->flags);
@@ -159,9 +150,7 @@ tabfs_opendir(const char *path, struct fuse_file_info *fi)
 
 static int
 tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-              off_t offset, struct fuse_file_info *fi)
-{
-    // send {op: "readdir", path} to the websocket handler
+              off_t offset, struct fuse_file_info *fi) {
     MAKE_REQ("readdir", {
         cJSON_AddStringToObject(req, "path", path);
     }, {
@@ -176,8 +165,7 @@ tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 }
 
 static int
-tabfs_releasedir(const char *path, struct fuse_file_info *fi)
-{
+tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
     MAKE_REQ("releasedir", {
         cJSON_AddStringToObject(req, "path", path);
         cJSON_AddNumberToObject(req, "fh", fi->fh);
