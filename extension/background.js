@@ -30,28 +30,18 @@ function queryTabs() {
   return new Promise((resolve, reject) => chrome.tabs.query({}, resolve));
 }
 
-function sendDebuggerCommand(tab, method, commandParams) {
-  return new Promise(resolve => chrome.debugger.sendCommand({tabId: id}, method, commandParams, resolve));
+function sendDebuggerCommand(tabId, method, commandParams) {
+  return new Promise((resolve, reject) =>
+    chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
+      console.log(method, result);
+      if (result) {
+        resolve(result);
+      } else {
+        reject(chrome.runtime.lastError);
+      }
+    })
+  );
 }
-
-const fhManager = (function() {
-  const handles = {};
-  let nextFh = 0;
-  return {
-    allocate(obj) { // -> fh
-      const fh = nextFh++;
-      handles[fh] = obj;
-      return fh;
-    },
-    ref(fh) {
-      if (!handles[fh]) throw new UnixError(unix.EIO);
-      return handles[fh];
-    },
-    free(fh) {
-      delete handles[fh];
-    }
-  };
-})();
 
 // tabs/by-id/ID/title
 // tabs/by-id/ID/url
@@ -67,6 +57,9 @@ const fhManager = (function() {
 function pathComponent(path, i) {
   const components = path.split('/');
   return components[i >= 0 ? i : components.length + i];
+}
+function sanitize(s) {
+  return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_');
 }
 
 const debugged = {};
@@ -103,7 +96,7 @@ const router = {
           async opendir(path) {
             const tabId = parseInt(pathComponent(path, -2));
             if (!debugged[tabId]) {
-              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.2", resolve));
+              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
               debugged[tabId] = 0;
             }
             debugged[tabId] += 1;
@@ -112,12 +105,35 @@ const router = {
           async readdir(path) {
             const tabId = parseInt(pathComponent(path, -2));
             if (!debugged[tabId]) throw new UnixError(unix.EIO);
-            const result = await new Promise(resolve => chrome.debugger.sendCommand({tabId}, "Page.getResourceTree", {}, resolve));
-            const frameTree = result.frameTree;
-            return frameTree.resources.map(r => String(r.contentSize));
+
+            const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+            return frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)));
           },
           async releasedir(path) {
             return 0;
+          },
+
+          "*": {
+            async read(path, fh, size, offset) {
+              const tabId = parseInt(pathComponent(path, -3));
+              const suffix = pathComponent(path, -1);
+
+              if (!debugged[tabId]) throw new UnixError(unix.EIO);
+
+              await sendDebuggerCommand(tabId, "Page.enable", {});
+
+              const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+              for (let resource of frameTree.resources) {
+                const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+                if (resourceSuffix === suffix) {
+                  const {content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+                    frameId: frameTree.frame.id,
+                    url: resource.url
+                  });
+                  return content.substr(offset, size);
+                }
+              }
+            }
           }
         }
       }
@@ -239,6 +255,7 @@ async function onmessage(event) {
       response = { op: 'releasedir' };
     }
   } catch (e) {
+    console.error(e);
     response = {
       op: req.op,
       error: e instanceof UnixError ? e.error : unix.EIO
