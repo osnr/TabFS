@@ -115,6 +115,19 @@ const router = {
             return (tab.title + "\n").substr(offset, size);
           }
         },
+        "text": {
+          async read(path, fh, size, offset) {
+            const tabId = parseInt(pathComponent(path, -2));
+            if (!debugged[tabId]) {
+              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
+              debugged[tabId] = 0;
+            }
+            debugged[tabId] += 1;
+            await sendDebuggerCommand(tabId, "Runtime.enable", {});
+            const {result} = await sendDebuggerCommand(tabId, "Runtime.evaluate", {expression: "document.body.innerText", returnByValue: true});
+            return result.value.substr(offset, size)
+          }
+        },
         "tree": {
           async opendir(path) {
             const tabId = parseInt(pathComponent(path, -2));
