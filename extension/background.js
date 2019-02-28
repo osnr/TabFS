@@ -5,6 +5,7 @@ const unix = {
   EINTR: 4,
   EIO: 5,
   ENXIO: 6,
+  ENOTSUP: 45,
 
   // Unix file types
   S_IFMT: 0170000, // type of file mask
@@ -117,6 +118,8 @@ const router = {
             async read(path, fh, size, offset) {
               const tabId = parseInt(pathComponent(path, -3));
               const suffix = pathComponent(path, -1);
+
+              if (suffix.startsWith("._")) throw new UnixError(unix.ENOTSUP);
 
               if (!debugged[tabId]) throw new UnixError(unix.EIO);
 
