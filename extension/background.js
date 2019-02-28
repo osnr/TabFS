@@ -31,6 +31,13 @@ function queryTabs() {
   return new Promise((resolve, reject) => chrome.tabs.query({}, resolve));
 }
 
+async function debugTab(tabId) {
+  if (!debugged[tabId]) {
+    await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
+    debugged[tabId] = 0;
+  }
+  debugged[tabId] += 1;
+}
 function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
     chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
@@ -115,27 +122,42 @@ const router = {
             return (tab.title + "\n").substr(offset, size);
           }
         },
-        "document.body.innerText.txt": {
+        "text": {
           async read(path, fh, size, offset) {
             const tabId = parseInt(pathComponent(path, -2));
-            if (!debugged[tabId]) {
-              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
-              debugged[tabId] = 0;
-            }
-            debugged[tabId] += 1;
+            await debugTab(tabId);
             await sendDebuggerCommand(tabId, "Runtime.enable", {});
             const {result} = await sendDebuggerCommand(tabId, "Runtime.evaluate", {expression: "document.body.innerText", returnByValue: true});
             return result.value.substr(offset, size)
           }
         },
+        "snapshot.mhtml": {
+          async read(path, fh, size, offset) {
+            const tabId = parseInt(pathComponent(path, -2));
+            await debugTab(tabId);
+            await sendDebuggerCommand(tabId, "Page.enable", {});
+
+            const {data} = await sendDebuggerCommand(tabId, "Page.captureSnapshot");
+            return data.substr(offset, size)
+          }
+        },
+        "screenshot.png": {
+          // Broken. Filesystem hangs (? in JS?) and needs to be killed if you read this.
+          async read(path, fh, size, offset) {
+            const tabId = parseInt(pathComponent(path, -2));
+            await debugTab(tabId);
+            await sendDebuggerCommand(tabId, "Page.enable", {});
+
+            const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
+            const buf = btoa(atob(data).substr(offset, size));
+            return { buf, base64Encoded: true };
+          }
+        },
+        
         "resources": {
           async opendir(path) {
             const tabId = parseInt(pathComponent(path, -2));
-            if (!debugged[tabId]) {
-              await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
-              debugged[tabId] = 0;
-            }
-            debugged[tabId] += 1;
+            await debugTab(tabId);
             return 0;
           },
           async readdir(path) {
