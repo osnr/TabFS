@@ -115,7 +115,7 @@ const router = {
             return (tab.title + "\n").substr(offset, size);
           }
         },
-        "text": {
+        "document.body.innerText.txt": {
           async read(path, fh, size, offset) {
             const tabId = parseInt(pathComponent(path, -2));
             if (!debugged[tabId]) {
@@ -128,7 +128,7 @@ const router = {
             return result.value.substr(offset, size)
           }
         },
-        "tree": {
+        "resources": {
           async opendir(path) {
             const tabId = parseInt(pathComponent(path, -2));
             if (!debugged[tabId]) {
