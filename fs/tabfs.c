@@ -85,12 +85,12 @@ static int tabfs_readlink(const char *path, char *buf, size_t size) {
         cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
         // FIXME: fix
         char *resp_buf = cJSON_GetStringValue(resp_buf_item);
-        size_t resp_buf_len = strlen(resp_buf);
-        size = resp_buf_len < size ? resp_buf_len : size;
+        size_t resp_buf_size = strlen(resp_buf) + 1;
+        size = resp_buf_size < size ? resp_buf_size : size;
 
         memcpy(buf, resp_buf, size);
 
-        ret = size;
+        ret = 0;
     });
 }
 

@@ -74,6 +74,28 @@ const router = {
      *   }
      * },
      */
+    "by-title": {
+      async readdir() {
+        const tabs = await queryTabs();
+        return tabs.map(tab => sanitize(String(tab.title)) + "_" + String(tab.id));
+      },
+      "*": {
+        async getattr(path) {
+          const st_size = (await this.readlink(path)).length + 1;
+          return {
+            st_mode: unix.S_IFLNK | 0444,
+            st_nlink: 1,
+            // You _must_ return correct linkee path length from getattr!
+            st_size
+          };
+        },
+        async readlink(path) {
+          const parts = path.split("_");
+          const id = parts[parts.length - 1];
+          return "../by-id/" + id;
+        }
+      }
+    },
     "by-id": {
       async readdir() {
         const tabs = await queryTabs();
@@ -190,6 +212,10 @@ async function read(path, fh, size, offset) {
   let route = findRoute(path);
   if (route.read) return route.read(path, fh, size, offset);
 }
+async function readlink(path) {
+  let route = findRoute(path);
+  if (route.readlink) return route.readlink(path);
+}
 
 async function release(path, fh) {
   let route = findRoute(path);
@@ -246,6 +272,13 @@ async function onmessage(event) {
       await release(req.path, req.fh);
       response = {
         op: 'release'
+      };
+
+    } else if (req.op === 'readlink') {
+      const buf = await readlink(req.path)
+      response = {
+        op: 'readlink',
+        buf
       };
 
     } else if (req.op === 'opendir') {
