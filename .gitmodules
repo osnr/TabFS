@@ -4,3 +4,6 @@
 [submodule "fs/mmx"]
 	path = fs/mmx
 	url = https://github.com/vurtun/mmx.git
+[submodule "fs/base64"]
+	path = fs/base64
+	url = https://github.com/zhicheng/base64.git

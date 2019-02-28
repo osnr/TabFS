@@ -8,6 +8,9 @@
 #include "cJSON/cJSON.h"
 #include "cJSON/cJSON.c"
 
+#include "base64/base64.h"
+#include "base64/base64.c"
+
 #include "common.h"
 #include "ws.h"
 
@@ -119,12 +122,15 @@ tabfs_read(const char *path, char *buf, size_t size, off_t offset,
 
         char *resp_buf = cJSON_GetStringValue(resp_buf_item);
         if (!resp_buf) return -EIO;
-
         size_t resp_buf_len = strlen(resp_buf);
-        size = resp_buf_len < size ? resp_buf_len : size;
 
-        memcpy(buf, resp_buf, size);
-
+        cJSON *base64_encoded_item = cJSON_GetObjectItemCaseSensitive(resp, "base64Encoded");
+        if (base64_encoded_item && cJSON_IsTrue(base64_encoded_item)) {
+            size = base64_decode(resp_buf, resp_buf_len, (unsigned char *) buf);
+        } else {
+            size = resp_buf_len < size ? resp_buf_len : size;
+            memcpy(buf, resp_buf, size);
+        }
         ret = size;
     });
 }

@@ -1,10 +1,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
-
-#include <sys/time.h>
-#include <stdio.h>
-#include <signal.h>
+#include <stdatomic.h>
 
 #include "common.h"
 
@@ -16,11 +13,13 @@ void common_init() {
     if (pipe(ws_to_tabfs)) exit(1);
 }
 
-// FIXME: we probably need memory fences here?? especially on
-// non-x86?? idk
-// see https://stackoverflow.com/questions/35837539/does-the-use-of-an-anonymous-pipe-introduce-a-memory-barrier-for-interthread-com
+// We probably technically need memory fences here? especially on
+// non-x86?? Are these right? idk. See
+// https://stackoverflow.com/questions/35837539/does-the-use-of-an-anonymous-pipe-introduce-a-memory-barrier-for-interthread-com
+// https://preshing.com/20120913/acquire-and-release-semantics/
 
 void common_send_tabfs_to_ws(char *request_data) {
+    atomic_thread_fence(memory_order_release);
     write(tabfs_to_ws[1], &request_data, sizeof(request_data));
 }
 
@@ -51,16 +50,19 @@ char *common_receive_tabfs_to_ws(fd_set_filler_fn_t filler) {
 
     char *request_data;
     read(tabfs_to_ws[0], &request_data, sizeof(request_data));
+    atomic_thread_fence(memory_order_acquire);
 
     return request_data;
 }
 
 void common_send_ws_to_tabfs(char *response_data) {
+    atomic_thread_fence(memory_order_release);
     write(ws_to_tabfs[1], &response_data, sizeof(response_data));
 }
 char *common_receive_ws_to_tabfs() {
     char *response_data;
     read(ws_to_tabfs[0], &response_data, sizeof(response_data));
+    atomic_thread_fence(memory_order_acquire);
 
     return response_data;
 }

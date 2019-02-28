@@ -126,13 +126,18 @@ const router = {
               for (let resource of frameTree.resources) {
                 const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
                 if (resourceSuffix === suffix) {
-                  const {content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+                  let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
                     frameId: frameTree.frame.id,
                     url: resource.url
                   });
+                  if (base64Encoded) {
+                    const buf = btoa(atob(content).substr(offset, size));
+                    return { buf, base64Encoded: true };
+                  }
                   return content.substr(offset, size);
                 }
               }
+              throw new UnixError(unix.ENOENT);
             }
           }
         }
@@ -226,11 +231,13 @@ async function onmessage(event) {
       };
 
     } else if (req.op === 'read') {
-      const buf = await read(req.path, req.fh, req.size, req.offset)
+      const ret = await read(req.path, req.fh, req.size, req.offset)
+      const buf = typeof ret === 'string' ? ret : ret.buf;
       response = {
         op: 'read',
         buf
       };
+      if (ret.base64Encoded) response.base64Encoded = ret.base64Encoded;
 
     } else if (req.op === 'release') {
       await release(req.path, req.fh);
@@ -263,7 +270,6 @@ async function onmessage(event) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  response.id = req.id;
   console.log('resp', response);
   ws.send(JSON.stringify(response));
 };
