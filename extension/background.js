@@ -84,7 +84,7 @@ const router = {
     "by-title": {
       async readdir() {
         const tabs = await queryTabs();
-        return tabs.map(tab => sanitize(String(tab.title)) + "_" + String(tab.id));
+        return tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id));
       },
       "*": {
         async getattr(path) {
@@ -176,8 +176,6 @@ const router = {
               const tabId = parseInt(pathComponent(path, -3));
               const suffix = pathComponent(path, -1);
 
-              if (suffix.startsWith("._")) throw new UnixError(unix.ENOTSUP);
-
               if (!debugged[tabId]) throw new UnixError(unix.EIO);
 
               await sendDebuggerCommand(tabId, "Page.enable", {});
@@ -208,7 +206,11 @@ const router = {
 
 function findRoute(path) {
   let route = router;
-  for (let segment of path.split("/")) {
+  let pathSegments = path.split("/");
+  if (pathSegments[pathSegments.length - 1].startsWith("._")) {
+    throw new UnixError(unix.ENOTSUP); // Apple Double file for xattrs
+  }
+  for (let segment of pathSegments) {
     if (segment === "") continue;
     route = route[segment] || route["*"];
 
