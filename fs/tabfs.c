@@ -32,6 +32,22 @@ static cJSON *send_request_then_await_response(cJSON *req) {
     return resp;
 }
 
+// This helper macro is used to implement all the FUSE fs operations.
+//
+// It constructs a JSON object to represent the incoming request, then
+// dispatches it to the WebSocket server in ws.c (which then
+// dispatches it to our browser extension). It then awaits the
+// response from the browser and lets us pull that apart to ultimately
+// return the data to FUSE.
+//
+// OP is an opcode string which the extension handles in JS.
+// REQ_BUILDER_BODY is a block which should add whatever request
+// properties you want to send to the browser to the `req` cJSON
+// object.  RESP_HANDLER_BODY should handle whatever response
+// properties are on the `resp` cJSON object and pass them back to the
+// kernel.  It should also set the value of `ret` to the desired
+// return value.  (MAKE_REQ takes over return from the containing
+// function so it can automatically return error values.)
 #define MAKE_REQ(OP, REQ_BUILDER_BODY, RESP_HANDLER_BODY)       \
     do {                                              \
         int ret = -1;                                 \
@@ -135,6 +151,22 @@ tabfs_read(const char *path, char *buf, size_t size, off_t offset,
     });
 }
 
+static int
+tabfs_write(const char *path, const char *buf, size_t size, off_t offset,
+            struct fuse_file_info *fi) {
+    MAKE_REQ("write", {
+        cJSON_AddStringToObject(req, "path", path);
+
+        char base64_buf[size + 1]; // ughh.
+        base64_encode((const unsigned char *) buf, size, base64_buf);
+
+        cJSON_AddStringToObject(req, "buf", base64_buf);
+        cJSON_AddNumberToObject(req, "offset", offset);
+    }, {
+        ret = size;
+    });
+}
+
 static int tabfs_release(const char *path, struct fuse_file_info *fi) {
     MAKE_REQ("release", {
         cJSON_AddStringToObject(req, "path", path);
@@ -187,6 +219,7 @@ static struct fuse_operations tabfs_filesystem_operations = {
     .readlink = tabfs_readlink,
     .open     = tabfs_open,    /* To enforce read-only access.       */
     .read     = tabfs_read,    /* To provide file content.           */
+    .write    = tabfs_write,
     .release  = tabfs_release,
 
     .opendir  = tabfs_opendir,

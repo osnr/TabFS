@@ -198,6 +198,17 @@ const router = {
               throw new UnixError(unix.ENOENT);
             }
           }
+        },
+
+        "control": {
+          async write(path, buf) {
+            const tabId = parseInt(pathComponent(path, -2));
+            if (buf.trim() === 'close') {
+              await new Promise(resolve => chrome.tabs.remove(tabId, resolve));
+            } else {
+              throw new UnixError(unix.EIO);
+            }
+          }
         }
       }
     }
@@ -223,10 +234,10 @@ async function getattr(path) {
   let route = findRoute(path);
   if (route.getattr) {
     return route.getattr(path);
-  } else if (route.read) {
+  } else if (route.read || route.write) {
     // default file attrs
     return {
-      st_mode: unix.S_IFREG | 0444,
+      st_mode: unix.S_IFREG | ((route.read && 0444) || (route.write && 0222)),
       st_nlink: 1,
       st_size: 100 // FIXME
     };
@@ -249,14 +260,18 @@ async function read(path, fh, size, offset) {
   let route = findRoute(path);
   if (route.read) return route.read(path, fh, size, offset);
 }
-async function readlink(path) {
+async function write(path, buf, offset) {
   let route = findRoute(path);
-  if (route.readlink) return route.readlink(path);
+  if (route.write) return route.write(path, buf, offset);
 }
-
 async function release(path, fh) {
   let route = findRoute(path);
   if (route.release) return route.release(path, fh);
+}
+
+async function readlink(path) {
+  let route = findRoute(path);
+  if (route.readlink) return route.readlink(path);
 }
 
 async function opendir(path) {
@@ -304,6 +319,14 @@ async function onmessage(event) {
         buf
       };
       if (ret.base64Encoded) response.base64Encoded = ret.base64Encoded;
+
+    } else if (req.op === 'write') {
+      // FIXME: decide whether base64 should be handled here
+      // or in a higher layer?
+      const ret = await write(req.path, atob(req.buf), req.offset)
+      response = {
+        op: 'write'
+      };
 
     } else if (req.op === 'release') {
       await release(req.path, req.fh);
