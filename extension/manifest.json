@@ -5,12 +5,18 @@
   "description": "Connects to TabFS filesystem",
   "version": "1.0",
 
-  "permissions": ["tabs", "debugger"],
+  "permissions": ["tabs", "debugger", "nativeMessaging"],
 
   "browser_action": {},
   
   "background": {
     "scripts": ["background.js"],
     "persistent": true
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tabfs@rsnous.com"
+    }
   }
 }

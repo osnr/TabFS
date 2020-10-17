@@ -289,9 +289,9 @@ async function releasedir(path) {
   if (route.releasedir) return route.releasedir(path);
 }
 
-let ws;
-async function onmessage(event) {
-  const req = JSON.parse(event.data);
+let port;
+/* let ws;*/
+async function onMessage(req) {
   console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
@@ -371,14 +371,18 @@ async function onmessage(event) {
 };
 
 function tryConnect() {
-  ws = new WebSocket("ws://localhost:8888");
+  port = chrome.runtime.connectNative('com.rsnous.TabFS');
   updateToolbarIcon();
-  ws.onopen = ws.onclose = updateToolbarIcon;
-  ws.onmessage = onmessage;
+  port.onMessage.addListener(onMessage);
+
+  /* ws = new WebSocket("ws://localhost:8888");
+   * updateToolbarIcon();
+   * ws.onopen = ws.onclose = updateToolbarIcon;
+   * ws.onmessage = onmessage;*/
 }
 
 function updateToolbarIcon() {
-  if (ws && ws.readyState == 1) { // OPEN
+  if (port && port.onMessage) { // OPEN
     chrome.browserAction.setBadgeBackgroundColor({color: 'blue'});
     chrome.browserAction.setBadgeText({text: 'f'});
   } else {

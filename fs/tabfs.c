@@ -12,7 +12,6 @@
 #include "base64/base64.c"
 
 #include "common.h"
-#include "ws.h"
 
 static cJSON *send_request_then_await_response(cJSON *req) {
     // Will be freed at receiver (ws.c, receive_tabfs_request_then_send_to_browser).
