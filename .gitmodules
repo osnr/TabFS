@@ -1,3 +1,6 @@
 [submodule "fs/cJSON"]
 	path = fs/cJSON
 	url = https://github.com/DaveGamble/cJSON.git
+[submodule "fs/base64"]
+	path = fs/base64
+	url = https://github.com/zhicheng/base64.git
