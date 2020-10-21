@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <fuse.h>
@@ -11,26 +12,26 @@
 #include "base64/base64.h"
 #include "base64/base64.c"
 
-#include "common.h"
-
 static cJSON *send_request_then_await_response(cJSON *req) {
-    // Will be freed at receiver (ws.c, receive_tabfs_request_then_send_to_browser).
     char *request_data = cJSON_Print(req);
-    common_send_tabfs_to_ws(request_data);
+    unsigned int request_len = strlen(request_data);
+    write(1, (char *) &request_len, 4); // stdout
+    write(1, request_data, request_len);
 
-    char *response_data = common_receive_ws_to_tabfs();
+    unsigned int response_len;
+    read(0, (char *) &response_len, 4); // stdin
+    char *response_data = malloc(response_len);
+    read(0, response_data, response_len);
     if (response_data == NULL) {
         // Connection is dead.
         return cJSON_Parse("{ \"error\": 5 }");
     }
 
     cJSON *resp = cJSON_Parse((const char *) response_data);
-    // Was allocated by sender (ws.c, websocket_frame).
     free(response_data);
 
     return resp;
 }
-
 // This helper macro is used to implement all the FUSE fs operations.
 //
 // It constructs a JSON object to represent the incoming request, then
@@ -229,10 +230,10 @@ static struct fuse_operations tabfs_filesystem_operations = {
 int
 main(int argc, char **argv)
 {
-    common_init();
-
-    /* pthread_t websocket_thread; */
-    /* pthread_create(&websocket_thread, NULL, websocket_main, NULL); */
-
-    return fuse_main(argc, argv, &tabfs_filesystem_operations, NULL);
+    FILE* log = fopen("log.txt", "w");
+    for (int i = 0; i < argc; i++) {
+        fprintf(log, "arg%d: [%s]\n", i, argv[i]); fflush(log);
+    }
+    char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", "mnt"};
+    return fuse_main(5, fuse_argv, &tabfs_filesystem_operations, NULL);
 }

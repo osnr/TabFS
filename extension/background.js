@@ -379,7 +379,7 @@ function tryConnect() {
   /* console.log('hello', port);*/
   /* updateToolbarIcon();*/
   port.onMessage.addListener(onMessage);
-  port.onDisconnect.addListener(p => {log(p)});
+  port.onDisconnect.addListener(p => {log('disconnect', p)});
 
   /* ws = new WebSocket("ws://localhost:8888");
    * updateToolbarIcon();
