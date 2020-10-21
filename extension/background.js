@@ -289,10 +289,14 @@ async function releasedir(path) {
   if (route.releasedir) return route.releasedir(path);
 }
 
+function log(...ss) {
+  console.log(...ss);
+}
+
 let port;
 /* let ws;*/
 async function onMessage(req) {
-  console.log('req', req);
+  log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
@@ -366,14 +370,16 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  console.log('resp', response);
-  ws.send(JSON.stringify(response));
+  log('resp', response);
+  /* ws.send(JSON.stringify(response));*/
 };
 
 function tryConnect() {
   port = chrome.runtime.connectNative('com.rsnous.TabFS');
-  updateToolbarIcon();
+  /* console.log('hello', port);*/
+  /* updateToolbarIcon();*/
   port.onMessage.addListener(onMessage);
+  port.onDisconnect.addListener(p => {log(p)});
 
   /* ws = new WebSocket("ws://localhost:8888");
    * updateToolbarIcon();
