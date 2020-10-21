@@ -231,8 +231,8 @@ main(int argc, char **argv)
 {
     common_init();
 
-    pthread_t websocket_thread;
-    pthread_create(&websocket_thread, NULL, websocket_main, NULL);
+    /* pthread_t websocket_thread; */
+    /* pthread_create(&websocket_thread, NULL, websocket_main, NULL); */
 
     return fuse_main(argc, argv, &tabfs_filesystem_operations, NULL);
 }

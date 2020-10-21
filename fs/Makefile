@@ -20,7 +20,7 @@ LIBS = -losxfuse
 
 all: $(TARGETS)
 
-tabfs: common.c ws.c tabfs.c
+tabfs: common.c tabfs.c
 	$(CC) $(CFLAGS_OSXFUSE) $(CFLAGS_EXTRA) -o $@ $^ $(LIBS)
 
 clean:
