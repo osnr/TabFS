@@ -371,7 +371,7 @@ async function onMessage(req) {
   /* console.timeEnd(req.op + ':' + req.path);*/
 
   log('resp', response);
-  /* ws.send(JSON.stringify(response));*/
+  port.postMessage(response);
 };
 
 function tryConnect() {

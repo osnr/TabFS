@@ -230,6 +230,12 @@ static struct fuse_operations tabfs_filesystem_operations = {
 int
 main(int argc, char **argv)
 {
+    /* system("killall -9 tabfs"); */
+    char killcmd[1000];
+    sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9", getpid());
+    system(killcmd);
+    system("diskutil umount force mnt > /dev/null");
+
     FILE* log = fopen("log.txt", "w");
     for (int i = 0; i < argc; i++) {
         fprintf(log, "arg%d: [%s]\n", i, argv[i]); fflush(log);
