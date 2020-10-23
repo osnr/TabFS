@@ -24,13 +24,6 @@ function UnixError(error) {
 }
 UnixError.prototype = Error.prototype;
 
-function getTab(id) {
-  return new Promise((resolve, reject) => chrome.tabs.get(id, resolve));
-}
-function queryTabs() {
-  return new Promise((resolve, reject) => chrome.tabs.query({}, resolve));
-}
-
 async function debugTab(tabId) {
   if (!debugged[tabId]) {
     await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
@@ -83,7 +76,7 @@ const router = {
      */
     "by-title": {
       async readdir() {
-        const tabs = await queryTabs();
+        const tabs = await browser.tabs.query({});
         return tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id));
       },
       "*": {
@@ -105,29 +98,30 @@ const router = {
     },
     "by-id": {
       async readdir() {
-        const tabs = await queryTabs();
+        const tabs = await browser.tabs.query({});
         return tabs.map(tab => String(tab.id));
       },
 
       "*": {
         "url": {
           async read(path, fh, size, offset) {
-            const tab = await getTab(parseInt(pathComponent(path, -2)));
+            const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
             return (tab.url + "\n").substr(offset, size);
           }
         },
         "title": {
           async read(path, fh, size, offset) {
-            const tab = await getTab(parseInt(pathComponent(path, -2)));
+            const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
             return (tab.title + "\n").substr(offset, size);
           }
         },
         "text": {
           async read(path, fh, size, offset) {
             const tabId = parseInt(pathComponent(path, -2));
-            await debugTab(tabId);
-            await sendDebuggerCommand(tabId, "Runtime.enable", {});
-            const {result} = await sendDebuggerCommand(tabId, "Runtime.evaluate", {expression: "document.body.innerText", returnByValue: true});
+            const {result} = await chrome.tabs.executeScript(tabId, {code: "console.log('hi'); document.body.innerText;"});
+            /* await debugTab(tabId);
+             * await sendDebuggerCommand(tabId, "Runtime.enable", {});
+             * const {result} = await sendDebuggerCommand(tabId, "Runtime.evaluate", {expression: "document.body.innerText", returnByValue: true});*/
             return result.value.substr(offset, size)
           }
         },

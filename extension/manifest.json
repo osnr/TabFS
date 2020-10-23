@@ -5,12 +5,16 @@
   "description": "Connects to TabFS filesystem",
   "version": "1.0",
 
-  "permissions": ["tabs", "debugger", "nativeMessaging", "unlimitedStorage"],
+  "permissions": [
+    "tabs", "debugger", "nativeMessaging",
+    "unlimitedStorage",
+    "*://*/*"
+  ],
 
   "browser_action": {},
   
   "background": {
-    "scripts": ["background.js"],
+    "scripts": ["vendor/browser-polyfill.js", "background.js"],
     "persistent": true
   },
 
