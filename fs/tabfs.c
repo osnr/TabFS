@@ -240,6 +240,6 @@ main(int argc, char **argv)
     for (int i = 0; i < argc; i++) {
         fprintf(log, "arg%d: [%s]\n", i, argv[i]); fflush(log);
     }
-    char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", "mnt"};
+    char* fuse_argv[] = {argv[0], "-odirect_io,noappledouble", "-s", "-f", "mnt"};
     return fuse_main(5, fuse_argv, &tabfs_filesystem_operations, NULL);
 }

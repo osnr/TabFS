@@ -294,7 +294,6 @@ function log(...ss) {
 }
 
 let port;
-/* let ws;*/
 async function onMessage(req) {
   log('req', req);
 

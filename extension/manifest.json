@@ -5,7 +5,7 @@
   "description": "Connects to TabFS filesystem",
   "version": "1.0",
 
-  "permissions": ["tabs", "debugger", "nativeMessaging"],
+  "permissions": ["tabs", "debugger", "nativeMessaging", "unlimitedStorage"],
 
   "browser_action": {},
   
