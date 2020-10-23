@@ -118,11 +118,8 @@ const router = {
         "text": {
           async read(path, fh, size, offset) {
             const tabId = parseInt(pathComponent(path, -2));
-            const {result} = await chrome.tabs.executeScript(tabId, {code: "console.log('hi'); document.body.innerText;"});
-            /* await debugTab(tabId);
-             * await sendDebuggerCommand(tabId, "Runtime.enable", {});
-             * const {result} = await sendDebuggerCommand(tabId, "Runtime.evaluate", {expression: "document.body.innerText", returnByValue: true});*/
-            return result.value.substr(offset, size)
+            const [result] = await browser.tabs.executeScript(tabId, {code: "document.body.innerText"});
+            return result.substr(offset, size)
           }
         },
         "snapshot.mhtml": {
