@@ -365,7 +365,7 @@ async function onMessage(req) {
 };
 
 function tryConnect() {
-  port = chrome.runtime.connectNative('com.rsnous.TabFS');
+  port = chrome.runtime.connectNative('com.rsnous.tabfs');
   /* console.log('hello', port);*/
   /* updateToolbarIcon();*/
   port.onMessage.addListener(onMessage);
