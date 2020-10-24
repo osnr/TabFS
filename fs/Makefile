@@ -4,24 +4,21 @@ TARGETS = tabfs
 OSXFUSE_ROOT = /usr/local
 #OSXFUSE_ROOT = /opt/local
 
-INCLUDE_DIR = $(OSXFUSE_ROOT)/include/osxfuse/fuse
-LIBRARY_DIR = $(OSXFUSE_ROOT)/lib
+CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wno-unused-function -g
 
-CC ?= gcc
-
-CFLAGS_OSXFUSE = -I$(INCLUDE_DIR) -L$(LIBRARY_DIR)
-CFLAGS_OSXFUSE += -DFUSE_USE_VERSION=26
-CFLAGS_OSXFUSE += -D_FILE_OFFSET_BITS=64
-CFLAGS_OSXFUSE += -D_DARWIN_USE_64_BIT_INODE
-
-CFLAGS_EXTRA = -Wall -Wno-unused-function -g $(CFLAGS)
-
-LIBS = -losxfuse
+ifeq ($(shell uname -s),Linux)
+	CFLAGS = $(CFLAGS_EXTRA)
+	LIBS = -lfuse
+endif
+ifeq ($(shell uname -s),Darwin)
+	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
+	LIBS = -losxfuse
+endif
 
 all: $(TARGETS)
 
 tabfs: tabfs.c
-	$(CC) $(CFLAGS_OSXFUSE) $(CFLAGS_EXTRA) -o $@ $^ $(LIBS)
+	cc $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f $(TARGETS) *.o
@@ -30,9 +27,3 @@ clean:
 unmount:
 	killall -9 tabfs || true
 	diskutil unmount force mnt || true
-
-mount: tabfs
-	./tabfs -odirect_io -s -f mnt
-
-debugmount: tabfs
-	lldb -- ./tabfs -odirect_io -s -f mnt
