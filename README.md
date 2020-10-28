@@ -1,9 +1,9 @@
-# tabfs
+# TabFS
 
 ## Setup
 
-You need to both install the Chrome extension and run the native
-filesystem.
+You need to compile the FUSE filesystem (written in C), then install
+the browser extension which runs it and talks to it.
 
 ### Run the C filesystem
 
@@ -19,7 +19,21 @@ $ mkdir mnt
 $ make
 ```
 
-### Install the Chrome extension
+Now install the native messaging host into your browser, so the
+extension can launch and talk to the filesystem:
+
+```
+$ ./install.sh [chrome | chromium | firefox]
+```
+
+### Install the browser extension
+
+I think it will work on Edge or Opera or whatever, too. You'll need to
+change the native messaging path in install.sh
+
+#### Firefox
+
+#### Chrome
 
 Go to the [Chrome extensions page](chrome://extensions).
 
@@ -56,3 +70,25 @@ When you, say, `cat` a file in the tab filesystem:
 marshalling)
 
 TODO: make diagrams?
+
+## hmm
+
+it's way too hard to make an extension. even 'make an extension' is
+a bad framing
+
+open input space -- filesystem
+
+now you have this whole 'language', this whole toolset, to control and
+automate your browser
+
+OSQuery
+
+fake filesystems talk
+
+Screenotate
+
+processes as files. the real process is the browser. 
+
+browser and Unix
+
+rmdir a non-empty directory

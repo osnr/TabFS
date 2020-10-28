@@ -234,12 +234,16 @@ main(int argc, char **argv)
     char killcmd[1000];
     sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9", getpid());
     system(killcmd);
+#ifdef __APPLE__
     system("diskutil umount force mnt > /dev/null");
+#else
+    system("fusermount -u mnt");
+#endif
 
     FILE* log = fopen("log.txt", "w");
     for (int i = 0; i < argc; i++) {
         fprintf(log, "arg%d: [%s]\n", i, argv[i]); fflush(log);
     }
-    char* fuse_argv[] = {argv[0], "-odirect_io,noappledouble", "-s", "-f", "mnt"};
+    char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", "mnt"};
     return fuse_main(5, fuse_argv, &tabfs_filesystem_operations, NULL);
 }
