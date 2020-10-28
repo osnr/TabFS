@@ -119,21 +119,23 @@ router["/tabs/by-title/*"] = {
      * },
      */
 
-// ensure that there are entries for all parents
+
+// ensure that there are entries for all ancestors
 for (let key in router) {
   let path = key;
   while (path !== "/") { // walk upward through the path
     path = path.substr(0, path.lastIndexOf("/"));
+    if (path == '') path = '/';
 
     if (!router[path]) {
       // find all direct children
-      const children = Object.keys(router)
-                             .filter(k => k.startsWith(path) &&
-                                        (k.match(/\//g) || []).length ===
-                                          (path.match(/\//g) || []).length + 1)
-                             .map(k => k.substr(path.length + 1))
+      let children = Object.keys(router)
+                           .filter(k => k.startsWith(path) &&
+                                      (k.match(/\//g) || []).length ===
+                                        (path.match(/\//g) || []).length + 1)
+                           .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
+      children = [...new Set(children)];
 
-      if (path == '') path = '/';
       router[path] = {entries() {
         return children;
       }}
@@ -145,6 +147,9 @@ if (TESTING) {
   (async () => {
     assert.deepEqual(await router['/tabs/by-id/*'].entries(), ['url', 'title', 'text', 'control']);
     assert.deepEqual(await router['/'].entries(), ['tabs']);
+    assert.deepEqual(await router['/tabs'].entries(), ['by-id', 'by-title']);
+    
+    assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);
   })()
 }
 
@@ -158,13 +163,15 @@ function findRoute(path) {
 
   let routingPath = "";
   for (let segment of pathSegments) {
-    if (router[routingPath + "/" + segment]) {
+    if (routingPath === "/") { routingPath = ""; }
+
+    if (router[routingPath + "/*"]) {
+      routingPath += "/*";
+    } else if (router[routingPath + "/" + segment]) {
       routingPath += "/" + segment;
     } else {
-      routingPath += "/*";
+      throw new UnixError(unix.ENOENT);
     }
-
-    if (!router[routingPath]) throw new UnixError(unix.ENOENT);
   }
   return router[routingPath];
 }
@@ -227,12 +234,12 @@ const ops = {
   },
   async readdir({path}) {
     let route = findRoute(path);
-    if (route.readdir) return { entries: await route.readdir(path) };
-    return { entries: [".", "..", ...Object.keys(route)] };
+    if (route.entries) return { entries: await route.entries(path) };
   },
   async releasedir({path}) {
     let route = findRoute(path);
     if (route.releasedir) return route.releasedir(path);
+    else return {};
   }
 };
 

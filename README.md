@@ -71,6 +71,10 @@ marshalling)
 
 TODO: make diagrams?
 
+## license
+
+GPLv3
+
 ## hmm
 
 it's way too hard to make an extension. even 'make an extension' is
