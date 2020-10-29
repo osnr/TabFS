@@ -51,7 +51,7 @@ function sanitize(s) {
    view of what the whole filesystem looks like at a glance. */
 const router = {};
 
-async function withTab(handler) {
+function withTab(handler) {
   return {
     async read(path, fh, size, offset) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
@@ -59,7 +59,7 @@ async function withTab(handler) {
     }
   };
 }
-async function fromScript(code) {
+function fromScript(code) {
   return {
     async read(path, fh, size, offset) {
       const tabId = parseInt(pathComponent(path, -2));
