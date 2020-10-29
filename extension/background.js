@@ -55,7 +55,7 @@ function withTab(handler) {
   return {
     async read(path, fh, size, offset) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return handler(tab);
+      return handler(tab).substr(offset, size);
     }
   };
 }
@@ -63,7 +63,7 @@ function fromScript(code) {
   return {
     async read(path, fh, size, offset) {
       const tabId = parseInt(pathComponent(path, -2));
-      return browser.tabs.executeScript(tabId, {code});
+      return browser.tabs.executeScript(tabId, {code}).substr(offset, size);
     }
   };
 }
@@ -78,6 +78,7 @@ router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 router["/tabs/by-id/*/control"] = {
+  // echo close >> mnt/tabs/by-id/1644/control
   async write(path, buf) {
     const tabId = parseInt(pathComponent(path, -2));
     if (buf.trim() === 'close') {
@@ -95,6 +96,7 @@ router["/tabs/by-title"] = {
   }
 };
 router["/tabs/by-title/*"] = {
+  // a symbolic link to /tabs/by-id/[id for this tab]
   async getattr(path) {
     const st_size = (await this.readlink(path)).length + 1;
     return {
@@ -120,7 +122,11 @@ router["/tabs/by-title/*"] = {
      */
 
 
-// ensure that there are entries for all ancestors
+// Ensure that there are routes for all ancestors. This algorithm is
+// probably not correct, but whatever.  I also think it would be
+// better to compute this stuff on the fly, so you could patch more
+// routes in at runtime, but I need to think a bit about how to make
+// that work with wildcards.
 for (let key in router) {
   let path = key;
   while (path !== "/") { // walk upward through the path
@@ -268,30 +274,10 @@ async function onMessage(req) {
 
 function tryConnect() {
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
-  /* console.log('hello', port);*/
-  /* updateToolbarIcon();*/
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {console.log('disconnect', p)});
-
-  /* ws = new WebSocket("ws://localhost:8888");
-   * updateToolbarIcon();
-   * ws.onopen = ws.onclose = updateToolbarIcon;
-   * ws.onmessage = onmessage;*/
-}
-
-function updateToolbarIcon() {
-  if (port && port.onMessage) { // OPEN
-    chrome.browserAction.setBadgeBackgroundColor({color: 'blue'});
-    chrome.browserAction.setBadgeText({text: 'f'});
-  } else {
-    chrome.browserAction.setBadgeBackgroundColor({color: 'red'});
-    chrome.browserAction.setBadgeText({text: '!'});
-  }
 }
 
 if (!TESTING) {
   tryConnect();
-  chrome.browserAction.onClicked.addListener(function() {
-    tryConnect();
-  });
 }

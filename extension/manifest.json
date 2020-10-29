@@ -11,8 +11,6 @@
     "*://*/*"
   ],
 
-  "browser_action": {},
-  
   "background": {
     "scripts": ["vendor/browser-polyfill.js", "background.js"],
     "persistent": true
