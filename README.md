@@ -1,10 +1,26 @@
 # TabFS
 
-Mount your browser tabs as a filesystem.
+Mount your browser tabs as a filesystem!
 
-## Examples of stuff you can do
+<img src="doc/finder.png" width="500">
+
+Each of your open tabs is mapped to a folder with a bunch of control
+and live-updating content files inside it. (TODO: update as I add more)
+
+<img src="doc/finder-contents.png" width="500">
+
+This gives you a _ton_ of power, because now you can apply [all the
+existing tools](https://twitter.com/rsnous/status/1018570020324962305)
+on your computer that already know how to deal with files -- terminal
+commands, scripting languages, etc -- and use them to control and draw
+information from your browser. You don't need to write a browser
+extension from scratch every time you want to do anything.
+
+## Examples of stuff you can do!
 
 (assuming your shell is in the `fs` subdirectory of this repo)
+
+(TODO: more of these)
 
 ### List the titles of all the tabs you have open 
 
