@@ -4,7 +4,7 @@ Mount your browser tabs as a filesystem.
 
 ## Examples of stuff you can do
 
-(assuming your shell is in the `fs` subdirectory)
+(assuming your shell is in the `fs` subdirectory of this repo)
 
 ### List the titles of all the tabs you have open 
 
@@ -39,12 +39,12 @@ First, install the browser extension.
 
 Then, install the C filesystem.
 
-### Install the browser extension
+### 1. Install the browser extension
 
 (I think it will work on Edge or Opera or whatever, too. You'll need to
 change the native messaging path in install.sh in those cases.)
 
-#### Chrome
+#### in Chrome
 
 Go to the [Chrome extensions page](chrome://extensions). Enable
 Developer mode (top-right corner).
@@ -54,10 +54,18 @@ Load-unpacked the `extension/` folder in this repo.
 Make a note of the extension ID. Mine is
 `jimpolemfaeckpjijgapgkmolankohgj`. We'll use this later.
 
-#### Firefox
+#### in Firefox
 
+You'll need to install as a "temporary extension", so it'll only last
+in your current FF session.
 
-### Install the C filesystem
+Go to [about:debugging#/runtime/this-firefox](about:debugging#/runtime/this-firefox).
+
+Load Temporary Add-on...
+
+Choose manifest.json in the extension subfolder of this repo.
+
+### 2. Install the C filesystem
 
 First, make sure you `git submodule update --init` to get the
 `fs/cJSON` and `fs/base64` dependencies.
@@ -88,15 +96,17 @@ or
 $ ./install.sh chromium jimpolemfaeckpjijgapgkmolankohgj
 ```
 
-### Ready
+### 3. Ready!
 
-Reload the extension in `chrome://extensions`.
+Go back to `chrome://extensions` or
+`about:debugging#/runtime/this-firefox` and reload the extension.
 
 Now your browser tabs should be mounted in `fs/mnt`!
 
-Open the background page inspector (click "background page" next to
-"Inspect views" in the extension's entry in the Chrome extensions
-page) to see the filesystem operations stream in.
+Open the background page inspector to see the filesystem operations
+stream in. (in Chrome, click "background page" next to "Inspect views"
+in the extension's entry in the Chrome extensions page; in Firefox,
+click "Inspect")
 
 <img src="doc/inspector.png" width="600">
 
@@ -113,6 +123,8 @@ operations, even when I don't feel like I'm actually doing anything.)
     synthetic files and what browser operations they map to.
 - `fs/`: Native FUSE filesystem, written in C
   - [`tabfs.c`](fs/tabfs.c): Talks to FUSE, implements fs operations, talks to extension.
+
+<!-- TODO: concretize this -->
 
 When you, say, `cat` a file in the tab filesystem:
 

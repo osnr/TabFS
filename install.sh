@@ -1,8 +1,8 @@
 #!/bin/bash -eux
 
 if [[ ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
-              ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32) ||
-              ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32) ) ]]; then
+          ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
+          ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32 ) ) ]]; then
     echo "Usage: $0 <chrome EXTENSION_ID | chromium EXTENSION_ID | firefox>"
     exit 2
 fi
