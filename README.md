@@ -1,54 +1,6 @@
 # TabFS
 
-## Setup
-
-First, install the browser extension.
-
-Then, install the C filesystem.
-
-### Install the browser extension
-
-(I think it will work on Edge or Opera or whatever, too. You'll need to
-change the native messaging path in install.sh in those cases.)
-
-#### Chrome
-
-Go to the [Chrome extensions page](chrome://extensions). Enable
-Developer mode (top-right corner).
-
-Load-unpacked the `extension/` folder in this repo.
-
-Get the extension ID.
-
-#### Firefox
-
-
-### Install the C filesystem
-
-First, make sure you `git submodule update --init` to get the
-`fs/cJSON` and `fs/base64` dependencies.
-
-And make sure you have FUSE. On Linux, for example, `sudo apt install
-libfuse-dev`. On macOS, get FUSE for macOS.
-
-```
-$ cd fs
-$ mkdir mnt
-$ make
-```
-
-Now install the native messaging host into your browser, so the
-extension can launch and talk to the filesystem:
-
-```
-$ ./install.sh [chrome | chromium | firefox]
-```
-
-### Ready
-
-Reload the extension in `chrome://extensions`.
-
-Now your browser tabs should be mounted in `fs/mnt`!
+Mount your browser tabs as a filesystem.
 
 ## Examples of stuff you can do
 
@@ -81,11 +33,86 @@ $ echo close | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 $ cat mnt/tabs/by-id/*/text > text.txt
 ```
 
+## Setup
+
+First, install the browser extension.
+
+Then, install the C filesystem.
+
+### Install the browser extension
+
+(I think it will work on Edge or Opera or whatever, too. You'll need to
+change the native messaging path in install.sh in those cases.)
+
+#### Chrome
+
+Go to the [Chrome extensions page](chrome://extensions). Enable
+Developer mode (top-right corner).
+
+Load-unpacked the `extension/` folder in this repo.
+
+Make a note of the extension ID. Mine is
+`jimpolemfaeckpjijgapgkmolankohgj`. We'll use this later.
+
+#### Firefox
+
+
+### Install the C filesystem
+
+First, make sure you `git submodule update --init` to get the
+`fs/cJSON` and `fs/base64` dependencies.
+
+And make sure you have FUSE. On Linux, for example, `sudo apt install
+libfuse-dev`. On macOS, get FUSE for macOS.
+
+```
+$ cd fs
+$ mkdir mnt
+$ make
+```
+
+Now install the native messaging host into your browser, so the
+extension can launch and talk to the filesystem:
+
+#### Chrome and Chromium
+
+Use the extension ID you copied earlier.
+
+```
+$ ./install.sh chrome jimpolemfaeckpjijgapgkmolankohgj
+```
+
+or
+
+```
+$ ./install.sh chromium jimpolemfaeckpjijgapgkmolankohgj
+```
+
+### Ready
+
+Reload the extension in `chrome://extensions`.
+
+Now your browser tabs should be mounted in `fs/mnt`!
+
+Open the background page inspector (click "background page" next to
+"Inspect views" in the extension's entry in the Chrome extensions
+page) to see the filesystem operations stream in.
+
+<img src="doc/inspector.png" width="600">
+
+This console is also incredibly helpful for debugging anything that
+goes wrong, which probably will happen.
+
+(My OS and applications are pretty chatty! They do a lot of
+operations, even when I don't feel like I'm actually doing anything.)
+
 ## Design
 
 - `extension/`: Browser extension, written in JS
+  - [`background.js`](extension/background.js): **The most interesting file**. Defines all the
+    synthetic files and what browser operations they map to.
 - `fs/`: Native FUSE filesystem, written in C
-  - `tabfs.c`: Talks to FUSE, implements fs operations, talks to browser.
+  - [`tabfs.c`](fs/tabfs.c): Talks to FUSE, implements fs operations, talks to extension.
 
 When you, say, `cat` a file in the tab filesystem:
 
