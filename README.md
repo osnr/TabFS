@@ -2,10 +2,28 @@
 
 ## Setup
 
-You need to compile the FUSE filesystem (written in C), then install
-the browser extension which runs it and talks to it.
+First, install the browser extension.
 
-### Run the C filesystem
+Then, install the C filesystem.
+
+### Install the browser extension
+
+(I think it will work on Edge or Opera or whatever, too. You'll need to
+change the native messaging path in install.sh in those cases.)
+
+#### Chrome
+
+Go to the [Chrome extensions page](chrome://extensions). Enable
+Developer mode (top-right corner).
+
+Load-unpacked the `extension/` folder in this repo.
+
+Get the extension ID.
+
+#### Firefox
+
+
+### Install the C filesystem
 
 First, make sure you `git submodule update --init` to get the
 `fs/cJSON` and `fs/base64` dependencies.
@@ -26,20 +44,42 @@ extension can launch and talk to the filesystem:
 $ ./install.sh [chrome | chromium | firefox]
 ```
 
-### Install the browser extension
+### Ready
 
-I think it will work on Edge or Opera or whatever, too. You'll need to
-change the native messaging path in install.sh
-
-#### Firefox
-
-#### Chrome
-
-Go to the [Chrome extensions page](chrome://extensions).
-
-Enable Developer mode. Load-unpacked the `extension/` folder in this repo.
+Reload the extension in `chrome://extensions`.
 
 Now your browser tabs should be mounted in `fs/mnt`!
+
+## Examples of stuff you can do
+
+(assuming your shell is in the `fs` subdirectory)
+
+### List the titles of all the tabs you have open 
+
+```
+$ cat mnt/tabs/by-id/*/title
+GitHub
+Extensions
+TabFS/install.sh at master · osnr/TabFS
+Alternative Extension Distribution Options - Google Chrome
+Web Store Hosting and Updating - Google Chrome
+Home / Twitter
+...
+```
+
+### Close all Stack Overflow tabs
+
+```
+$ echo close | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
+```
+
+### Save text of all tabs to a file
+
+(wip, FIXME)
+
+```
+$ cat mnt/tabs/by-id/*/text > text.txt
+```
 
 ## Design
 

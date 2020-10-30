@@ -1,7 +1,14 @@
 #!/bin/bash -eux
 
+if [[ ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
+              ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32) ||
+              ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32) ) ]]; then
+    echo "Usage: $0 <chrome EXTENSION_ID | chromium EXTENSION_ID | firefox>"
+    exit 2
+fi
+    
 OS="$(uname -s)"
-BROWSER="$(echo ${1:-chrome} | tr '[:upper:]' '[:lower:]')"
+BROWSER="$(echo $1 | tr '[:upper:]' '[:lower:]')"
 
 # https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_manifests#Manifest_location
 # https://developer.chrome.com/extensions/nativeMessaging#native-messaging-host-location
@@ -27,6 +34,7 @@ EXE_PATH=$(pwd)/fs/tabfs
 
 case "$BROWSER" in
     chrome | chromium)
+        EXTENSION_ID=$2
         MANIFEST=$(cat <<EOF
 {
   "name": "$APP_NAME",
@@ -34,7 +42,7 @@ case "$BROWSER" in
   "path": "$EXE_PATH",
   "type": "stdio",
   "allowed_extensions": ["tabfs@rsnous.com"],
-  "allowed_origins": ["chrome-extension://jimpolemfaeckpjijgapgkmolankohgj/"]
+  "allowed_origins": ["chrome-extension://$EXTENSION_ID/"]
 }
 EOF
         );;
