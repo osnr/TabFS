@@ -44,6 +44,17 @@ function pathComponent(path, i) {
 function sanitize(s) {
   return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_');
 }
+function stringSize(str) {
+  // returns the byte length of an utf8 string
+  var s = str.length;
+  for (var i=str.length-1; i>=0; i--) {
+    var code = str.charCodeAt(i);
+    if (code > 0x7f && code <= 0x7ff) s++;
+    else if (code > 0x7ff && code <= 0xffff) s+=2;
+    if (code >= 0xDC00 && code <= 0xDFFF) i--; //trail surrogate
+  }
+  return s + 1;
+}
 
 /* if I could specify a custom editor interface for all the routing
    below ... I would highlight the route names in blocks of some color
@@ -53,6 +64,14 @@ const router = {};
 
 function withTab(handler) {
   return {
+    async getattr(path) {
+      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
+      return {
+        st_mode: unix.S_IFREG | 0444,
+        st_nlink: 1,
+        st_size: stringSize(handler(tab))
+      };
+    },
     async read(path, fh, size, offset) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
       return handler(tab).substr(offset, size);
@@ -61,9 +80,18 @@ function withTab(handler) {
 }
 function fromScript(code) {
   return {
+    async getattr(path) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return {
+        st_mode: unix.S_IFREG | 0444,
+        st_nlink: 1,
+        st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
+      };
+    },
     async read(path, fh, size, offset) {
       const tabId = parseInt(pathComponent(path, -2));
-      return browser.tabs.executeScript(tabId, {code}).substr(offset, size);
+      return (await browser.tabs.executeScript(tabId, {code}))[0]
+        .substr(offset, size);
     }
   };
 }
