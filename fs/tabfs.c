@@ -35,10 +35,10 @@ static cJSON *send_request_then_await_response(cJSON *req) {
 // This helper macro is used to implement all the FUSE fs operations.
 //
 // It constructs a JSON object to represent the incoming request, then
-// dispatches it to the WebSocket server in ws.c (which then
-// dispatches it to our browser extension). It then awaits the
-// response from the browser and lets us pull that apart to ultimately
-// return the data to FUSE.
+// forwards that object to `send_request_then_await_response` (which
+// then dispatches it to our browser extension over stdout). It awaits
+// the response from the browser over stdin, then lets us pull that
+// apart to ultimately return the data to FUSE.
 //
 // OP is an opcode string which the extension handles in JS.
 // REQ_BUILDER_BODY is a block which should add whatever request
