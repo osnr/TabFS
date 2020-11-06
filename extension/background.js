@@ -106,14 +106,13 @@ router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 router["/tabs/by-id/*/control"] = {
-  // echo close >> mnt/tabs/by-id/1644/control
+  // echo remove >> mnt/tabs/by-id/1644/control
   async write(path, buf) {
     const tabId = parseInt(pathComponent(path, -2));
-    if (buf.trim() === 'close') {
-      await new Promise(resolve => chrome.tabs.remove(tabId, resolve));
-    } else {
-      throw new UnixError(unix.EIO);
-    }
+    const command = buf.trim();
+    // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
+    // see https://developer.chrome.com/extensions/tabs
+    await new Promise(resolve => chrome.tabs[command](tabId, resolve));
   }
 };
 
@@ -176,7 +175,7 @@ for (let key in router) {
     }
   }
 }
-if (TESTING) {
+if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
     assert.deepEqual(await router['/tabs/by-id/*'].entries(), ['url', 'title', 'text', 'control']);

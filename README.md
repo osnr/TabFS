@@ -38,7 +38,7 @@ Home / Twitter
 ### Close all Stack Overflow tabs
 
 ```
-$ echo close | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
+$ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 ```
 
 ### Save text of all tabs to a file
