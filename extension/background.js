@@ -137,7 +137,35 @@ router["/tabs/by-id/*/resources"] = {
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     return frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)));
   }
-}
+};
+router["/tabs/by-id/*/resources/*"] = {
+  async read(path, fh, size, offset) {
+    const tabId = parseInt(pathComponent(path, -3));
+    const suffix = pathComponent(path, -1);
+
+    if (!debugging[tabId]) throw new UnixError(unix.EIO);
+
+    await sendDebuggerCommand(tabId, "Page.enable", {});
+
+    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    for (let resource of frameTree.resources) {
+      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+      if (resourceSuffix === suffix) {
+        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+          frameId: frameTree.frame.id,
+          url: resource.url
+        });
+        if (base64Encoded) {
+          const buf = btoa(atob(content).substr(offset, size));
+          return { buf, base64Encoded: true };
+        }
+        return content.substr(offset, size);
+      }
+    }
+    throw new UnixError(unix.ENOENT);
+  }
+};
+
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
   async write(path, buf) {
