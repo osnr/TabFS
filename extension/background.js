@@ -77,6 +77,12 @@ function sendDebuggerCommand(tabId, method, commandParams) {
   );
 }
 
+let lastFocusedWindowId;
+browser.windows.getLastFocused().then(window => { lastFocusedWindowId = window.id; });
+browser.windows.onFocusChanged.addListener(windowId => {
+  if (windowId !== -1) lastFocusedWindowId = windowId;
+});
+
 /* if I could specify a custom editor interface for all the routing
    below ... I would highlight the route names in blocks of some color
    that sticks out, and let you collapse them. then you could get a
@@ -243,20 +249,10 @@ router["/tabs/last-focused"] = {
     };
   },
   async readlink(path) {
-    const windowId = (await browser.windows.getLastFocused()).id;
-    const id = (await browser.tabs.query({ active: true, windowId }))[0].id;
+    const id = (await browser.tabs.query({ active: true, windowId: lastFocusedWindowId }))[0].id;
     return "by-id/" + id;
   }
 }
-
-    /* "last-focused": {
-     *   // FIXME: symlink to tab by id.
-     *   async readlink() {
-     *     return "../windows/last-focused/selected-tab"
-     *   }
-     * },
-     */
-
 
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever.  I also think it would be
