@@ -56,6 +56,27 @@ function stringSize(str) {
   return s + 1;
 }
 
+const debugging = {};
+async function debugTab(tabId) {
+  if (!debugging[tabId]) {
+    await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
+    debugging[tabId] = 0;
+  }
+  debugging[tabId] += 1;
+}
+function sendDebuggerCommand(tabId, method, commandParams) {
+  return new Promise((resolve, reject) =>
+    chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
+      console.log(method, result);
+      if (result) {
+        resolve(result);
+      } else {
+        reject(chrome.runtime.lastError);
+      }
+    })
+  );
+}
+
 /* if I could specify a custom editor interface for all the routing
    below ... I would highlight the route names in blocks of some color
    that sticks out, and let you collapse them. then you could get a
@@ -105,6 +126,18 @@ router["/tabs/by-id"] = {
 router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
+router["/tabs/by-id/*/resources"] = {
+  async opendir(path) {
+    const tabId = parseInt(pathComponent(path, -2));
+    await debugTab(tabId);
+    return 0;
+  },
+  async entries(path) {
+    const tabId = parseInt(pathComponent(path, -2));
+    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    return frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)));
+  }
+}
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
   async write(path, buf) {
