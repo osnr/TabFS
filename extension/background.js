@@ -139,6 +139,33 @@ router["/tabs/by-id/*/resources"] = {
   }
 };
 router["/tabs/by-id/*/resources/*"] = {
+  async getattr(path) {
+    const tabId = parseInt(pathComponent(path, -3));
+    const suffix = pathComponent(path, -1);
+
+    if (!debugging[tabId]) throw new UnixError(unix.EIO);
+
+    await sendDebuggerCommand(tabId, "Page.enable", {});
+
+    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    for (let resource of frameTree.resources) {
+      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+      if (resourceSuffix === suffix) {
+        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+          frameId: frameTree.frame.id,
+          url: resource.url
+        });
+        if (base64Encoded) {
+          content = atob(content);
+        }
+        return {
+          st_mode: unix.S_IFREG | 0444,
+          st_nlink: 1,
+          st_size: stringSize(content) // FIXME
+        };
+      }
+    }
+  },
   async read(path, fh, size, offset) {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
@@ -163,6 +190,9 @@ router["/tabs/by-id/*/resources/*"] = {
       }
     }
     throw new UnixError(unix.ENOENT);
+  },
+  async release(path, fh) {
+    return {};
   }
 };
 
@@ -200,6 +230,24 @@ router["/tabs/by-title/*"] = {
     return "../by-id/" + id;
   }
 };
+
+router["/tabs/last-focused"] = {
+  // a symbolic link to /tabs/by-id/[id for this tab]
+  async getattr(path) {
+    const st_size = (await this.readlink(path)).length + 1;
+    return {
+      st_mode: unix.S_IFLNK | 0444,
+      st_nlink: 1,
+      // You _must_ return correct linkee path length from getattr!
+      st_size
+    };
+  },
+  async readlink(path) {
+    const windowId = (await browser.windows.getLastFocused()).id;
+    const id = (await browser.tabs.query({ active: true, windowId }))[0].id;
+    return "by-id/" + id;
+  }
+}
 
     /* "last-focused": {
      *   // FIXME: symlink to tab by id.
