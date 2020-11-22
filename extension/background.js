@@ -349,7 +349,14 @@ const ops = {
 
   async read({path, fh, size, offset}) {
     let route = findRoute(path);
-    if (route.read) return { buf: await route.read(path, fh, size, offset) };
+    if (route.read) {
+      const ret = await route.read(path, fh, size, offset);
+      if (typeof ret === 'string') {
+        return { buf: ret };
+      } else {
+        return ret;
+      }
+    }
   },
   async write({path, buf, offset}) {
     let route = findRoute(path);
