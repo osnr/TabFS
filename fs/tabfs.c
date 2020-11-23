@@ -12,16 +12,26 @@
 #include "base64/base64.h"
 #include "base64/base64.c"
 
+FILE* l;
+
 static cJSON *send_request_then_await_response(cJSON *req) {
     char *request_data = cJSON_Print(req);
     unsigned int request_len = strlen(request_data);
     write(1, (char *) &request_len, 4); // stdout
-    write(1, request_data, request_len);
+    unsigned int bytes_written = 0;
+    while (bytes_written < request_len) {
+        bytes_written += write(1, request_data, request_len);
+    }
+    /* fprintf(l, "req[%s]\n", request_data); fflush(l); */
 
     unsigned int response_len;
     read(0, (char *) &response_len, 4); // stdin
     char *response_data = malloc(response_len);
-    read(0, response_data, response_len);
+    unsigned int bytes_read = 0;
+    while (bytes_read < response_len) {
+        bytes_read += read(0, response_data + bytes_read, response_len);
+    }
+    /* fprintf(l, "resp(%d; expected %d)[%s]\n", bytes_read, response_len, response_data); fflush(l); */
     if (response_data == NULL) {
         // Connection is dead.
         return cJSON_Parse("{ \"error\": 5 }");
@@ -227,9 +237,7 @@ static struct fuse_operations tabfs_filesystem_operations = {
     .releasedir = tabfs_releasedir
 };
 
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     /* system("killall -9 tabfs"); */
     char killcmd[1000];
     sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9", getpid());
@@ -240,9 +248,9 @@ main(int argc, char **argv)
     system("fusermount -u mnt");
 #endif
 
-    FILE* log = fopen("log.txt", "w");
+    l = fopen("log.txt", "w");
     for (int i = 0; i < argc; i++) {
-        fprintf(log, "arg%d: [%s]\n", i, argv[i]); fflush(log);
+        fprintf(l, "arg%d: [%s]\n", i, argv[i]); fflush(l);
     }
     char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", "mnt"};
     return fuse_main(5, fuse_argv, &tabfs_filesystem_operations, NULL);
