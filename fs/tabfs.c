@@ -1,3 +1,8 @@
+// This file should rarely need to be changed. (which is intentional,
+// because it is a pain to program here, it's a pain to recompile and
+// reload it, and it's a pain to debug it.)  Most of the real meat of
+// TabFS is on the extension side, not here.
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -238,7 +243,6 @@ static struct fuse_operations tabfs_filesystem_operations = {
 };
 
 int main(int argc, char **argv) {
-    /* system("killall -9 tabfs"); */
     char killcmd[1000];
     sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9", getpid());
     system(killcmd);

@@ -173,7 +173,7 @@ GPLv3
 ## hmm
 
 it's way too hard to make an extension. even 'make an extension' is
-a bad framing
+a bad framing. lightness
 
 open input space -- filesystem
 
@@ -191,3 +191,4 @@ processes as files. the real process is the browser.
 browser and Unix
 
 rmdir a non-empty directory
+

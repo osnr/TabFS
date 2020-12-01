@@ -89,9 +89,17 @@ browser.windows.onFocusChanged.addListener(windowId => {
    view of what the whole filesystem looks like at a glance. */
 const router = {};
 
+const directoryGetattr = async function() {
+  return {
+    st_mode: unix.S_IFDIR | 0755,
+    st_nlink: 3,
+    st_size: 0,
+  };
+};
+
 function withTab(handler) {
   return {
-    async getattr(path) {
+    async getattr({path}) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
       return {
         st_mode: unix.S_IFREG | 0444,
@@ -99,15 +107,15 @@ function withTab(handler) {
         st_size: stringSize(handler(tab))
       };
     },
-    async read(path, fh, size, offset) {
+    async read({path, fh, size, offset}) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return handler(tab).substr(offset, size);
+      return { buf: handler(tab).substr(offset, size) };
     }
   };
 }
 function fromScript(code) {
   return {
-    async getattr(path) {
+    async getattr({path}) {
       const tabId = parseInt(pathComponent(path, -2));
       return {
         st_mode: unix.S_IFREG | 0444,
@@ -115,33 +123,35 @@ function fromScript(code) {
         st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
       };
     },
-    async read(path, fh, size, offset) {
+    async read({path, fh, size, offset}) {
       const tabId = parseInt(pathComponent(path, -2));
-      return (await browser.tabs.executeScript(tabId, {code}))[0]
-        .substr(offset, size);
+      return { buf: (await browser.tabs.executeScript(tabId, {code}))[0]
+        .substr(offset, size) }
     }
   };
 }
 
-router["/tabs/by-id"] = {
-  async entries() {
+router["/tabs/by-id"] = {  
+  getattr: directoryGetattr,
+  async readdir() {
     const tabs = await browser.tabs.query({});
-    return tabs.map(tab => String(tab.id));
+    return { entries: tabs.map(tab => String(tab.id)) };
   }
-}
+};
 router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 router["/tabs/by-id/*/resources"] = {
-  async opendir(path) {
+  getattr: directoryGetattr,
+  async opendir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     await debugTab(tabId);
     return 0;
   },
-  async entries(path) {
+  async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-    return frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)));
+    return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };
   }
 };
 router["/tabs/by-id/*/resources/*"] = {
@@ -171,6 +181,9 @@ router["/tabs/by-id/*/resources/*"] = {
         };
       }
     }
+  },
+  async open(path) {
+
   },
   async read(path, fh, size, offset) {
     const tabId = parseInt(pathComponent(path, -3));
@@ -203,8 +216,15 @@ router["/tabs/by-id/*/resources/*"] = {
 };
 
 router["/tabs/by-id/*/control"] = {
+  async getattr() { // generic read-only file attr
+    return {
+      st_mode: unix.S_IFREG | 0222,
+      st_nlink: 1,
+      st_size: 100 // FIXME
+    };
+  },
   // echo remove >> mnt/tabs/by-id/1644/control
-  async write(path, buf) {
+  async write({path, buf}) {
     const tabId = parseInt(pathComponent(path, -2));
     const command = buf.trim();
     // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
@@ -214,14 +234,15 @@ router["/tabs/by-id/*/control"] = {
 };
 
 router["/tabs/by-title"] = {
-  async entries() {
+  getattr: directoryGetattr,
+  async readdir() {
     const tabs = await browser.tabs.query({});
-    return tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id));
+    return { entries: tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id)) };
   }
 };
 router["/tabs/by-title/*"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
-  async getattr(path) {
+  async getattr({path}) {
     const st_size = (await this.readlink(path)).length + 1;
     return {
       st_mode: unix.S_IFLNK | 0444,
@@ -230,16 +251,16 @@ router["/tabs/by-title/*"] = {
       st_size
     };
   },
-  async readlink(path) {
+  async readlink({path}) {
     const parts = path.split("_");
     const id = parts[parts.length - 1];
-    return "../by-id/" + id;
+    return { buf: "../by-id/" + id };
   }
 };
 
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
-  async getattr(path) {
+  async getattr({path}) {
     const st_size = (await this.readlink(path)).length + 1;
     return {
       st_mode: unix.S_IFLNK | 0444,
@@ -248,9 +269,9 @@ router["/tabs/last-focused"] = {
       st_size
     };
   },
-  async readlink(path) {
+  async readlink({path}) {
     const id = (await browser.tabs.query({ active: true, windowId: lastFocusedWindowId }))[0].id;
-    return "by-id/" + id;
+    return { buf: "by-id/" + id };
   }
 }
 
@@ -274,18 +295,19 @@ for (let key in router) {
                            .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
       children = [...new Set(children)];
 
-      router[path] = {entries() {
-        return children;
-      }}
+      router[path] = {
+        getattr: directoryGetattr,
+        readdir() { return { entries: children }; }
+      };
     }
   }
 }
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].entries(), ['url', 'title', 'text', 'control']);
-    assert.deepEqual(await router['/'].entries(), ['tabs']);
-    assert.deepEqual(await router['/tabs'].entries(), ['by-id', 'by-title']);
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), ['url', 'title', 'text', 'control']);
+    assert.deepEqual(await router['/'].readdir(), ['tabs']);
+    assert.deepEqual(await router['/tabs'].readdir(), ['by-id', 'by-title']);
     
     assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);
   })()
@@ -314,88 +336,89 @@ function findRoute(path) {
   return router[routingPath];
 }
 
-const ops = {
-  async getattr({path}) {
-    let route = findRoute(path);
-    if (route.getattr) {
-      return {
-        st_mode: 0,
-        st_nlink: 0,
-        st_size: 0,
-        ...(await route.getattr(path))
-      };
-    } else if (route.read || route.write) {
-      // default file attrs
-      return {
-        st_mode: unix.S_IFREG | ((route.read && 0444) || (route.write && 0222)),
-        st_nlink: 1,
-        st_size: 100 // FIXME
-      };
-    } else {
-      // default dir attrs
-      return {
-        st_mode: unix.S_IFDIR | 0755,
-        st_nlink: 3,
-        st_size: 0
-      };
-    }
-  },
-
-  async open({path}) {
-    let route = findRoute(path);
-    if (route.open) return { fh: await route.open(path) };
-    else return { fh: 0 }; // empty fh
-  },
-
-  async read({path, fh, size, offset}) {
-    let route = findRoute(path);
-    if (route.read) {
-      const ret = await route.read(path, fh, size, offset);
-      if (typeof ret === 'string') {
-        return { buf: ret };
-      } else {
-        return ret;
-      }
-    }
-  },
-  async write({path, buf, offset}) {
-    let route = findRoute(path);
-    if (route.write) return route.write(path, atob(buf), offset);
-  },
-  async release({path, fh}) {
-    let route = findRoute(path);
-    if (route.release) return route.release(path, fh);
-  },
-
-  async readlink({path}) {
-    let route = findRoute(path);
-    if (route.readlink) return { buf: await route.readlink(path) };
-  },
-
-  async opendir({path}) {
-    let route = findRoute(path);
-    if (route.opendir) return { fh: await route.opendir(path) };
-    else return { fh: 0 }; // empty fh
-  },
-  async readdir({path}) {
-    let route = findRoute(path);
-    if (route.entries) return { entries: await route.entries(path) };
-  },
-  async releasedir({path}) {
-    let route = findRoute(path);
-    if (route.releasedir) return route.releasedir(path);
-    else return {};
-  }
-};
+/* const ops = {
+ *   async getattr({path}) {
+ *     let route = findRoute(path);
+ *     if (route.getattr) {
+ *       return {
+ *         st_mode: 0,
+ *         st_nlink: 0,
+ *         st_size: 0,
+ *         ...(await route.getattr(path))
+ *       };
+ *     } else if (route.read || route.write) {
+ *       // default file attrs
+ *       return {
+ *         st_mode: unix.S_IFREG | ((route.read && 0444) || (route.write && 0222)),
+ *         st_nlink: 1,
+ *         st_size: 100 // FIXME
+ *       };
+ *     } else {
+ *       // default dir attrs
+ *       return {
+ *         st_mode: unix.S_IFDIR | 0755,
+ *         st_nlink: 3,
+ *         st_size: 0
+ *       };
+ *     }
+ *   },
+ * 
+ *   async open({path}) {
+ *     let route = findRoute(path);
+ *     if (route.open) return { fh: await route.open(path) };
+ *     else return { fh: 0 }; // empty fh
+ *   },
+ * 
+ *   async read({path, fh, size, offset}) {
+ *     let route = findRoute(path);
+ *     if (route.read) {
+ *       const ret = await route.read(path, fh, size, offset);
+ *       if (typeof ret === 'string') {
+ *         return { buf: ret };
+ *       } else {
+ *         return ret;
+ *       }
+ *     }
+ *   },
+ *   async write({path, buf, offset}) {
+ *     let route = findRoute(path);
+ *     if (route.write) return route.write(path, atob(buf), offset);
+ *   },
+ *   async release({path, fh}) {
+ *     let route = findRoute(path);
+ *     if (route.release) return route.release(path, fh);
+ *   },
+ * 
+ *   async readlink({path}) {
+ *     let route = findRoute(path);
+ *     if (route.readlink) return { buf: await route.readlink(path) };
+ *   },
+ * 
+ *   async opendir({path}) {
+ *     let route = findRoute(path);
+ *     if (route.opendir) return { fh: await route.opendir(path) };
+ *     else return { fh: 0 }; // empty fh
+ *   },
+ *   async readdir({path}) {
+ *     let route = findRoute(path);
+ *     if (route.entries) return { entries: await route.entries(path) };
+ *   },
+ *   async releasedir({path}) {
+ *     let route = findRoute(path);
+ *     if (route.releasedir) return route.releasedir(path);
+ *     else return {};
+ *   }
+ * };*/
 
 let port;
 async function onMessage(req) {
-  console.log('req', req);
+  /* console.log('req', req);*/
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
   try {
-    response = await ops[req.op](req);
+    console.log(req.path, req.op, findRoute(req.path)[req.op]);
+    response = await findRoute(req.path)[req.op](req);
     response.op = req.op;
 
   } catch (e) {
@@ -407,7 +430,7 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  console.log('resp', response);
+  /* console.log('resp', response);*/
   port.postMessage(response);
 };
 
