@@ -52,54 +52,6 @@ static int await_response(char **resp) {
     return response_len;
 }
 
-// This helper macro is used to implement all the FUSE fs operations.
-//
-// It constructs a JSON object to represent the incoming request, then
-// forwards that object to `send_request_then_await_response` (which
-// then dispatches it to our browser extension over stdout). It awaits
-// the response from the browser over stdin, then lets us pull that
-// apart to ultimately return the data to FUSE.
-//
-// OP is an opcode string which the extension handles in JS.
-// REQ_BUILDER_BODY is a block which should add whatever request
-// properties you want to send to the browser to the `req` cJSON
-// object.  RESP_HANDLER_BODY should handle whatever response
-// properties are on the `resp` cJSON object and pass them back to the
-// kernel.  It should also set the value of `ret` to the desired
-// return value.  (MAKE_REQ takes over return from the containing
-// function so it can automatically return error values.)
-#define MAKE_REQ(OP, REQ_BUILDER_BODY, RESP_HANDLER_BODY)       \
-    do {                                              \
-        int ret = -1;                                 \
-        cJSON *req = NULL;                                              \
-        cJSON *resp = NULL;                                             \
-                                                                        \
-        req = cJSON_CreateObject();                                     \
-        cJSON_AddStringToObject(req, "op", OP);                         \
-        REQ_BUILDER_BODY                                                \
-                                                                        \
-        resp = send_request_then_await_response(req);                   \
-                                                                        \
-        cJSON *error_item = cJSON_GetObjectItemCaseSensitive(resp, "error"); \
-        if (error_item) {                                               \
-            ret = -error_item->valueint;                                \
-            if (ret != 0) goto done;                                    \
-        }                                                               \
-                                                                        \
-        ret = -1;                                                       \
-        RESP_HANDLER_BODY                                               \
-                                                                        \
-    done:                                                       \
-        if (req != NULL) cJSON_Delete(req);                     \
-        if (resp != NULL) cJSON_Delete(resp);                       \
-        return ret;                                             \
-    } while (0)
-
-#define JSON_GET_PROP_INT(LVALUE, KEY) \
-    do { \
-        LVALUE = cJSON_GetObjectItemCaseSensitive(resp, KEY)->valueint;     \
-    } while (0)
-
 #define receive_response(fmt, ...)                                      \
     do {                                                                \
         char *resp; int resp_len;                                       \
@@ -122,19 +74,6 @@ static int tabfs_getattr(const char *path, struct stat *stbuf) {
     receive_response("{st_mode: %d, st_nlink: %d, st_size: %d}",
                      &stbuf->st_mode, &stbuf->st_nlink, &stbuf->st_size);
     return 0;
-
-    /* MAKE_REQ("getattr", { */
-        
-
-    /*     /\* cJSON_AddStringToObject(req, "path", path); *\/ */
-
-    /* }, { */
-    /*     JSON_GET_PROP_INT(stbuf->st_mode, "st_mode"); */
-    /*     JSON_GET_PROP_INT(stbuf->st_nlink, "st_nlink"); */
-    /*     JSON_GET_PROP_INT(stbuf->st_size, "st_size"); */
-
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int tabfs_readlink(const char *path, char *buf, size_t size) {
@@ -144,20 +83,6 @@ static int tabfs_readlink(const char *path, char *buf, size_t size) {
     snprintf(buf, size, "%s", scan_buf); free(scan_buf);
 
     return 0;
-
-    /* MAKE_REQ("readlink", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /* }, { */
-    /*     cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf"); */
-    /*     // FIXME: fix */
-    /*     char *resp_buf = cJSON_GetStringValue(resp_buf_item); */
-    /*     size_t resp_buf_size = strlen(resp_buf) + 1; */
-    /*     size = resp_buf_size < size ? resp_buf_size : size; */
-
-    /*     memcpy(buf, resp_buf, size); */
-
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int tabfs_open(const char *path, struct fuse_file_info *fi) {
@@ -166,17 +91,6 @@ static int tabfs_open(const char *path, struct fuse_file_info *fi) {
     receive_response("{fh: %d}", &fi->fh);
 
     return 0;
-    
-    /* MAKE_REQ("open", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
-    /* }, { */
-    /*     cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh"); */
-    /*     if (!fh_item) return -EIO; */
-    /*     fi->fh = fh_item->valueint; */
-
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int
@@ -292,18 +206,6 @@ tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     free(resp);
     return 0;
-
-    /* MAKE_REQ("readdir", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /* }, { */
-    /*     cJSON *entries = cJSON_GetObjectItemCaseSensitive(resp, "entries"); */
-    /*     cJSON *entry; */
-    /*     cJSON_ArrayForEach(entry, entries) { */
-    /*         filler(buf, cJSON_GetStringValue(entry), NULL, 0); */
-    /*     } */
-
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int
