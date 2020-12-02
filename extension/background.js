@@ -243,7 +243,7 @@ router["/tabs/by-title"] = {
 router["/tabs/by-title/*"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async getattr({path}) {
-    const st_size = (await this.readlink(path)).length + 1;
+    const st_size = (await this.readlink({path})).length + 1;
     return {
       st_mode: unix.S_IFLNK | 0444,
       st_nlink: 1,
@@ -261,7 +261,7 @@ router["/tabs/by-title/*"] = {
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async getattr({path}) {
-    const st_size = (await this.readlink(path)).length + 1;
+    const st_size = (await this.readlink({path})).length + 1;
     return {
       st_mode: unix.S_IFLNK | 0444,
       st_nlink: 1,
