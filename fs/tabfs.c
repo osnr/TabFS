@@ -11,14 +11,8 @@
 #include <pthread.h>
 #include <fuse.h>
 
-#include "cJSON/cJSON.h"
-#include "cJSON/cJSON.c"
-
 #include "frozen/frozen.h"
 #include "frozen/frozen.c"
-
-#include "base64/base64.h"
-#include "base64/base64.c"
 
 FILE* l;
 
@@ -191,10 +185,11 @@ tabfs_read(const char *path, char *buf, size_t size, off_t offset,
     send_request("{op: %Q, path: %Q, size: %d, offset: %d, fh: %d, flags: %d}",
                  "read", path, size, offset, fi->fh, fi->flags);
 
+    // FIXME: base64
     char *scan_buf; receive_response("{buf: %Q}", &scan_buf);
     snprintf(buf, size, "%s", scan_buf); free(scan_buf);
 
-    return 0;
+    return strlen(scan_buf);
 
     /* MAKE_REQ("read", { */
     /*     cJSON_AddStringToObject(req, "path", path); */
