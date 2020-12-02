@@ -155,7 +155,7 @@ router["/tabs/by-id/*/resources"] = {
   }
 };
 router["/tabs/by-id/*/resources/*"] = {
-  async getattr(path) {
+  async getattr({path}) {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
 
@@ -182,10 +182,10 @@ router["/tabs/by-id/*/resources/*"] = {
       }
     }
   },
-  async open(path) {
-
+  async open({path}) {
+    // FIXME: cache the file
   },
-  async read(path, fh, size, offset) {
+  async read({path, fh, size, offset}) {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
 
@@ -210,7 +210,7 @@ router["/tabs/by-id/*/resources/*"] = {
     }
     throw new UnixError(unix.ENOENT);
   },
-  async release(path, fh) {
+  async release({path, fh}) {
     return {};
   }
 };
@@ -412,12 +412,12 @@ function findRoute(path) {
 
 let port;
 async function onMessage(req) {
-  /* console.log('req', req);*/
+  console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
   try {
-    console.log(req.path, req.op, findRoute(req.path)[req.op]);
+    console.log(findRoute(req.path)[req.op]);
     response = await findRoute(req.path)[req.op](req);
     response.op = req.op;
 
@@ -430,7 +430,7 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  /* console.log('resp', response);*/
+  console.log('resp', response);
   port.postMessage(response);
 };
 

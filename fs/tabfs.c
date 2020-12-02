@@ -14,21 +14,32 @@
 #include "cJSON/cJSON.h"
 #include "cJSON/cJSON.c"
 
+#include "frozen/frozen.h"
+#include "frozen/frozen.c"
+
 #include "base64/base64.h"
 #include "base64/base64.c"
 
 FILE* l;
 
-static cJSON *send_request_then_await_response(cJSON *req) {
-    char *request_data = cJSON_Print(req);
-    unsigned int request_len = strlen(request_data);
+static void send_request(const char *fmt, ...) {
+    va_list args; va_start(args, fmt);
+
+    char request_data[1024*1024]; // max size of native->Chrome message
+    struct json_out out = JSON_OUT_BUF(request_data, sizeof(request_data));
+    unsigned int request_len = json_vprintf(&out, fmt, args);
+
+    va_end(args);
+
     write(1, (char *) &request_len, 4); // stdout
     unsigned int bytes_written = 0;
     while (bytes_written < request_len) {
         bytes_written += write(1, request_data, request_len);
     }
     /* fprintf(l, "req[%s]\n", request_data); fflush(l); */
+}
 
+static int await_response(char **resp) {
     unsigned int response_len;
     read(0, (char *) &response_len, 4); // stdin
     char *response_data = malloc(response_len);
@@ -39,14 +50,14 @@ static cJSON *send_request_then_await_response(cJSON *req) {
     /* fprintf(l, "resp(%d; expected %d)[%s]\n", bytes_read, response_len, response_data); fflush(l); */
     if (response_data == NULL) {
         // Connection is dead.
-        return cJSON_Parse("{ \"error\": 5 }");
+        *resp = "{ \"error\": 5 }";
+        return strlen(*resp);
     }
 
-    cJSON *resp = cJSON_Parse((const char *) response_data);
-    free(response_data);
-
-    return resp;
+    *resp = response_data;
+    return response_len;
 }
+
 // This helper macro is used to implement all the FUSE fs operations.
 //
 // It constructs a JSON object to represent the incoming request, then
@@ -95,138 +106,225 @@ static cJSON *send_request_then_await_response(cJSON *req) {
         LVALUE = cJSON_GetObjectItemCaseSensitive(resp, KEY)->valueint;     \
     } while (0)
 
+#define receive_response(fmt, ...)                                      \
+    do {                                                                \
+        char *resp; int resp_len;                                       \
+        resp_len = await_response(&resp);                               \
+        if (!resp_len) return -EIO;                                     \
+                                                                        \
+        int err;                                                        \
+        if (json_scanf(resp, resp_len, "{error: %d}", &err) && err) {   \
+            free(resp); return -err;                                    \
+        }                                                               \
+                                                                        \
+        json_scanf(resp, resp_len, fmt, __VA_ARGS__);                   \
+        free(resp);                                                     \
+    } while (0)
+
 static int tabfs_getattr(const char *path, struct stat *stbuf) {
+    send_request("{op: %Q, path: %Q}", "getattr", path);
+
     memset(stbuf, 0, sizeof(struct stat));
+    receive_response("{st_mode: %d, st_nlink: %d, st_size: %d}",
+                     &stbuf->st_mode, &stbuf->st_nlink, &stbuf->st_size);
+    return 0;
 
-    MAKE_REQ("getattr", {
-        cJSON_AddStringToObject(req, "path", path);
-    }, {
-        JSON_GET_PROP_INT(stbuf->st_mode, "st_mode");
-        JSON_GET_PROP_INT(stbuf->st_nlink, "st_nlink");
-        JSON_GET_PROP_INT(stbuf->st_size, "st_size");
+    /* MAKE_REQ("getattr", { */
+        
 
-        ret = 0;
-    });
+    /*     /\* cJSON_AddStringToObject(req, "path", path); *\/ */
+
+    /* }, { */
+    /*     JSON_GET_PROP_INT(stbuf->st_mode, "st_mode"); */
+    /*     JSON_GET_PROP_INT(stbuf->st_nlink, "st_nlink"); */
+    /*     JSON_GET_PROP_INT(stbuf->st_size, "st_size"); */
+
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int tabfs_readlink(const char *path, char *buf, size_t size) {
-    MAKE_REQ("readlink", {
-        cJSON_AddStringToObject(req, "path", path);
-    }, {
-        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
-        // FIXME: fix
-        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
-        size_t resp_buf_size = strlen(resp_buf) + 1;
-        size = resp_buf_size < size ? resp_buf_size : size;
+    send_request("{op: %Q, path: %Q}", "readlink", path);
 
-        memcpy(buf, resp_buf, size);
+    char *scan_buf; receive_response("{buf: %Q}", &scan_buf);
+    snprintf(buf, size, "%s", scan_buf); free(scan_buf);
 
-        ret = 0;
-    });
+    return 0;
+
+    /* MAKE_REQ("readlink", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /* }, { */
+    /*     cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf"); */
+    /*     // FIXME: fix */
+    /*     char *resp_buf = cJSON_GetStringValue(resp_buf_item); */
+    /*     size_t resp_buf_size = strlen(resp_buf) + 1; */
+    /*     size = resp_buf_size < size ? resp_buf_size : size; */
+
+    /*     memcpy(buf, resp_buf, size); */
+
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int tabfs_open(const char *path, struct fuse_file_info *fi) {
-    MAKE_REQ("open", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "flags", fi->flags);
-    }, {
-        cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh");
-        if (fh_item) fi->fh = fh_item->valueint;
+    send_request("{op: %Q, path: %Q, flags: %d}", "open", path, fi->flags);
 
-        ret = 0;
-    });
+    receive_response("{fh: %d}", &fi->fh);
+
+    return 0;
+    
+    /* MAKE_REQ("open", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
+    /* }, { */
+    /*     cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh"); */
+    /*     if (!fh_item) return -EIO; */
+    /*     fi->fh = fh_item->valueint; */
+
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int
 tabfs_read(const char *path, char *buf, size_t size, off_t offset,
            struct fuse_file_info *fi) {
-    MAKE_REQ("read", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "size", size);
-        cJSON_AddNumberToObject(req, "offset", offset);
+    send_request("{op: %Q, path: %Q, size: %d, offset: %d, fh: %d, flags: %d}",
+                 "read", path, size, offset, fi->fh, fi->flags);
 
-        cJSON_AddNumberToObject(req, "fh", fi->fh);
-        cJSON_AddNumberToObject(req, "flags", fi->flags);
-    }, {
-        cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf");
-        if (!resp_buf_item) return -EIO;
+    char *scan_buf; receive_response("{buf: %Q}", &scan_buf);
+    snprintf(buf, size, "%s", scan_buf); free(scan_buf);
 
-        char *resp_buf = cJSON_GetStringValue(resp_buf_item);
-        if (!resp_buf) return -EIO;
-        size_t resp_buf_len = strlen(resp_buf);
+    return 0;
 
-        cJSON *base64_encoded_item = cJSON_GetObjectItemCaseSensitive(resp, "base64Encoded");
-        if (base64_encoded_item && cJSON_IsTrue(base64_encoded_item)) {
-            size = base64_decode(resp_buf, resp_buf_len, (unsigned char *) buf);
-        } else {
-            size = resp_buf_len < size ? resp_buf_len : size;
-            memcpy(buf, resp_buf, size);
-        }
-        ret = size;
-    });
+    /* MAKE_REQ("read", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /*     cJSON_AddNumberToObject(req, "size", size); */
+    /*     cJSON_AddNumberToObject(req, "offset", offset); */
+
+    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
+    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
+    /* }, { */
+    /*     cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf"); */
+    /*     if (!resp_buf_item) return -EIO; */
+
+    /*     char *resp_buf = cJSON_GetStringValue(resp_buf_item); */
+    /*     if (!resp_buf) return -EIO; */
+    /*     size_t resp_buf_len = strlen(resp_buf); */
+
+    /*     cJSON *base64_encoded_item = cJSON_GetObjectItemCaseSensitive(resp, "base64Encoded"); */
+    /*     if (base64_encoded_item && cJSON_IsTrue(base64_encoded_item)) { */
+    /*         size = base64_decode(resp_buf, resp_buf_len, (unsigned char *) buf); */
+    /*     } else { */
+    /*         size = resp_buf_len < size ? resp_buf_len : size; */
+    /*         memcpy(buf, resp_buf, size); */
+    /*     } */
+    /*     ret = size; */
+    /* }); */
 }
 
 static int
 tabfs_write(const char *path, const char *buf, size_t size, off_t offset,
             struct fuse_file_info *fi) {
-    MAKE_REQ("write", {
-        cJSON_AddStringToObject(req, "path", path);
+    
+    send_request("{op: %Q, path: %Q, buf: %V, offset: %d, fh: %d, flags: %d}",
+                 "write", path, size, buf, offset, fi->fh, fi->flags);
 
-        char base64_buf[size + 1]; // ughh.
-        base64_encode((const unsigned char *) buf, size, base64_buf);
+    int ret; receive_response("{size: %d}", &ret); return ret;
 
-        cJSON_AddStringToObject(req, "buf", base64_buf);
-        cJSON_AddNumberToObject(req, "offset", offset);
-    }, {
-        ret = size;
-    });
+    /* MAKE_REQ("write", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+
+    /*     char base64_buf[size + 1]; // ughh. */
+    /*     base64_encode((const unsigned char *) buf, size, base64_buf); */
+
+    /*     cJSON_AddStringToObject(req, "buf", base64_buf); */
+    /*     cJSON_AddNumberToObject(req, "offset", offset); */
+    /* }, { */
+    /*     ret = size; */
+    /* }); */
 }
 
 static int tabfs_release(const char *path, struct fuse_file_info *fi) {
-    MAKE_REQ("release", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "fh", fi->fh);
-    }, {
-        ret = 0;
-    });
+    send_request("{op: %Q, path: %Q, fh: %d}",
+                 "release", path, fi->fh);
+
+    receive_response("{}", NULL);
+
+    return 0;
+    
+    /* MAKE_REQ("release", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
+    /* }, { */
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int tabfs_opendir(const char *path, struct fuse_file_info *fi) {
-    MAKE_REQ("opendir", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "flags", fi->flags);
-    }, {
-        cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh");
-        if (fh_item) fi->fh = fh_item->valueint;
+    send_request("{op: %Q, path: %Q, flags: %d}",
+                 "opendir", path, fi->flags);
+    
+    receive_response("{fh: %d}", &fi->fh);
 
-        ret = 0;
-    });
+    return 0;
+
+    /* MAKE_REQ("opendir", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
+    /* }, { */
+    /*     cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh"); */
+    /*     if (fh_item) fi->fh = fh_item->valueint; */
+
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int
 tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
               off_t offset, struct fuse_file_info *fi) {
-    MAKE_REQ("readdir", {
-        cJSON_AddStringToObject(req, "path", path);
-    }, {
-        cJSON *entries = cJSON_GetObjectItemCaseSensitive(resp, "entries");
-        cJSON *entry;
-        cJSON_ArrayForEach(entry, entries) {
-            filler(buf, cJSON_GetStringValue(entry), NULL, 0);
-        }
+    send_request("{op: %Q, path: %Q, offset: %d}",
+                 "readdir", path, offset);
 
-        ret = 0;
-    });
+    char *resp; int resp_len;
+    resp_len = await_response(&resp);
+    if (!resp_len) return -EIO;
+
+    struct json_token t;
+    for (int i = 0; json_scanf_array_elem(resp, resp_len, ".entries", i, &t) > 0; i++) {
+        char entry[t.len + 1]; snprintf(entry, t.len + 1, "%.*s", t.len, t.ptr);
+        filler(buf, entry, NULL, 0);
+    }
+
+    free(resp);
+    return 0;
+
+    /* MAKE_REQ("readdir", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /* }, { */
+    /*     cJSON *entries = cJSON_GetObjectItemCaseSensitive(resp, "entries"); */
+    /*     cJSON *entry; */
+    /*     cJSON_ArrayForEach(entry, entries) { */
+    /*         filler(buf, cJSON_GetStringValue(entry), NULL, 0); */
+    /*     } */
+
+    /*     ret = 0; */
+    /* }); */
 }
 
 static int
 tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
-    MAKE_REQ("releasedir", {
-        cJSON_AddStringToObject(req, "path", path);
-        cJSON_AddNumberToObject(req, "fh", fi->fh);
-    }, {
-        ret = 0;
-    });
+    send_request("{op: %Q, path: %Q, fh: %d}",
+                 "release", path, fi->fh);
+
+    receive_response("{}", NULL);
+
+    return 0;
+    /* MAKE_REQ("releasedir", { */
+    /*     cJSON_AddStringToObject(req, "path", path); */
+    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
+    /* }, { */
+    /*     ret = 0; */
+    /* }); */
 }
 
 static struct fuse_operations tabfs_filesystem_operations = {

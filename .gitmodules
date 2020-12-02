@@ -4,3 +4,6 @@
 [submodule "fs/base64"]
 	path = fs/base64
 	url = https://github.com/zhicheng/base64.git
+[submodule "fs/frozen"]
+	path = fs/frozen
+	url = https://github.com/cesanta/frozen.git
