@@ -20,11 +20,14 @@ const unix = {
   S_IFSOCK: 0140000, // socket
 }
 
-function UnixError(error) {
-  this.name = "UnixError";
-  this.error = error;
+class UnixError extends Error {
+  constructor(error) {
+    super();
+
+    this.name = "UnixError";
+    this.error = error;
+  }
 }
-UnixError.prototype = Error.prototype;
 
 // tabs/by-id/ID/title
 // tabs/by-id/ID/url
@@ -58,11 +61,19 @@ function stringSize(str) {
 
 const debugging = {};
 async function debugTab(tabId) {
-  if (!debugging[tabId]) {
-    await new Promise(resolve => chrome.debugger.attach({tabId}, "1.3", resolve));
-    debugging[tabId] = 0;
+  if (debugging[tabId]) {
+    debugging[tabId] += 1;
+
+  } else {
+    await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        debugging[tabId] = 1;
+        resolve();
+      }
+    }));
   }
-  debugging[tabId] += 1;
 }
 function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
@@ -107,6 +118,7 @@ function withTab(handler) {
         st_size: stringSize(handler(tab))
       };
     },
+    async open({path}) { return { fh: 0 }; },
     async read({path, fh, size, offset}) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
       return { buf: handler(tab).substr(offset, size) };
@@ -123,6 +135,7 @@ function fromScript(code) {
         st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
       };
     },
+    async open({path}) { return { fh: 0 }; },
     async read({path, fh, size, offset}) {
       const tabId = parseInt(pathComponent(path, -2));
       return { buf: (await browser.tabs.executeScript(tabId, {code}))[0]
@@ -133,6 +146,7 @@ function fromScript(code) {
 
 router["/tabs/by-id"] = {  
   getattr: directoryGetattr,
+  async opendir({path}) { return { fh: 0 }; },
   async readdir() {
     const tabs = await browser.tabs.query({});
     return { entries: tabs.map(tab => String(tab.id)) };
@@ -146,7 +160,7 @@ router["/tabs/by-id/*/resources"] = {
   async opendir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     await debugTab(tabId);
-    return 0;
+    return { fh: 0 };
   },
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
@@ -184,6 +198,7 @@ router["/tabs/by-id/*/resources/*"] = {
   },
   async open({path}) {
     // FIXME: cache the file
+    return {fh: 3};
   },
   async read({path, fh, size, offset}) {
     const tabId = parseInt(pathComponent(path, -3));
@@ -235,6 +250,7 @@ router["/tabs/by-id/*/control"] = {
 
 router["/tabs/by-title"] = {
   getattr: directoryGetattr,
+  async opendir({path}) { return { fh: 0 }; },
   async readdir() {
     const tabs = await browser.tabs.query({});
     return { entries: tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id)) };
@@ -243,7 +259,7 @@ router["/tabs/by-title"] = {
 router["/tabs/by-title/*"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async getattr({path}) {
-    const st_size = (await this.readlink({path})).length + 1;
+    const st_size = (await this.readlink({path})).buf.length + 1;
     return {
       st_mode: unix.S_IFLNK | 0444,
       st_nlink: 1,
@@ -297,6 +313,7 @@ for (let key in router) {
 
       router[path] = {
         getattr: directoryGetattr,
+        opendir({path}) { return { fh: 0 }; },
         readdir() { return { entries: children }; }
       };
     }
@@ -417,7 +434,6 @@ async function onMessage(req) {
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
   try {
-    console.log(findRoute(req.path)[req.op]);
     response = await findRoute(req.path)[req.op](req);
     response.op = req.op;
 
