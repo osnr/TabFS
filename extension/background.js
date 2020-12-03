@@ -138,6 +138,18 @@ router["/tabs/by-id"] = {
 router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
+router["/tabs/by-id/*/screenshot.png"] = {
+  async read({path, fh, size, offset}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    await debugTab(tabId);
+    await sendDebuggerCommand(tabId, "Page.enable", {});
+
+    const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
+    const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    const slice = arr.slice(offset, offset + size);
+    return { buf: String.fromCharCode(...slice) };
+  }
+};
 router["/tabs/by-id/*/resources"] = {
   async opendir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
@@ -367,6 +379,7 @@ async function onMessage(req) {
   try {
     response = await findRoute(req.path)[req.op](req);
     response.op = req.op;
+    if (response.buf) response.buf = btoa(response.buf);
 
   } catch (e) {
     console.error(e);

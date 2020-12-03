@@ -79,8 +79,9 @@ static int tabfs_getattr(const char *path, struct stat *stbuf) {
 static int tabfs_readlink(const char *path, char *buf, size_t size) {
     send_request("{op: %Q, path: %Q}", "readlink", path);
 
-    char *scan_buf; receive_response("{buf: %Q}", &scan_buf);
-    snprintf(buf, size, "%s", scan_buf); free(scan_buf);
+    char *scan_buf; int scan_len;
+    receive_response("{buf: %V}", &scan_buf, &scan_len);
+    memcpy(buf, scan_buf, scan_len < size ? scan_len : size); free(scan_buf);
 
     return 0;
 }
@@ -99,11 +100,11 @@ tabfs_read(const char *path, char *buf, size_t size, off_t offset,
     send_request("{op: %Q, path: %Q, size: %d, offset: %d, fh: %d, flags: %d}",
                  "read", path, size, offset, fi->fh, fi->flags);
 
-    // FIXME: base64
-    char *scan_buf; receive_response("{buf: %Q}", &scan_buf);
-    snprintf(buf, size, "%s", scan_buf); free(scan_buf);
+    char *scan_buf; int scan_len;
+    receive_response("{buf: %V}", &scan_buf, &scan_len);
+    memcpy(buf, scan_buf, scan_len < size ? scan_len : size); free(scan_buf);
 
-    return strlen(scan_buf);
+    return scan_len;
 
     /* MAKE_REQ("read", { */
     /*     cJSON_AddStringToObject(req, "path", path); */

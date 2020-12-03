@@ -1,12 +1,12 @@
 {
   "manifest_version": 2,
 
-  "name": "TabFS Extension",
-  "description": "Connects to TabFS filesystem",
+  "name": "TabFS",
+  "description": "Mount your browser tabs as a filesystem",
   "version": "1.0",
 
   "permissions": [
-    "tabs", "debugger", "nativeMessaging",
+    "tabs", "tabCapture", "debugger", "nativeMessaging",
     "unlimitedStorage",
     "*://*/*"
   ],

@@ -51,14 +51,17 @@ $ cat mnt/tabs/by-id/*/text > text.txt
 
 ## Setup
 
+**disclaimer**: security, functionality
+
 First, install the browser extension.
 
 Then, install the C filesystem.
 
 ### 1. Install the browser extension
 
-(I think it will work on Edge or Opera or whatever, too. You'll need to
-change the native messaging path in install.sh in those cases.)
+(I think it will work on Edge or Opera or whatever, too. You'll need
+to change the native messaging path in install.sh in those cases. Not
+sure about Safari.)
 
 #### in Chrome
 
@@ -67,7 +70,7 @@ Developer mode (top-right corner).
 
 Load-unpacked the `extension/` folder in this repo.
 
-Make a note of the extension ID. Mine is
+**Make a note of the extension ID Chrome assigns.** Mine is
 `jimpolemfaeckpjijgapgkmolankohgj`. We'll use this later.
 
 #### in Firefox
@@ -134,11 +137,12 @@ operations, even when I don't feel like I'm actually doing anything.)
 
 ## Design
 
-- `extension/`: Browser extension, written in JS
-  - [`background.js`](extension/background.js): **The most interesting file**. Defines all the
-    synthetic files and what browser operations they map to.
 - `fs/`: Native FUSE filesystem, written in C
   - [`tabfs.c`](fs/tabfs.c): Talks to FUSE, implements fs operations, talks to extension.
+- `extension/`: Browser extension, written in JS
+  - [`background.js`](extension/background.js): **The most interesting
+    file**. Defines all the synthetic files and what browser
+    operations they invoke behind the scenes.
 
 <!-- TODO: concretize this -->
 
@@ -172,6 +176,10 @@ GPLv3
 
 ## hmm
 
+processes as files. the real process is the browser. 
+
+browser and Unix
+
 it's way too hard to make an extension. even 'make an extension' is
 a bad framing. lightness
 
@@ -185,10 +193,6 @@ OSQuery
 fake filesystems talk
 
 Screenotate
-
-processes as files. the real process is the browser. 
-
-browser and Unix
 
 rmdir a non-empty directory
 
