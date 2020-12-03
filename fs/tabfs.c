@@ -136,7 +136,7 @@ tabfs_write(const char *path, const char *buf, size_t size, off_t offset,
             struct fuse_file_info *fi) {
     
     send_request("{op: %Q, path: %Q, buf: %V, offset: %d, fh: %d, flags: %d}",
-                 "write", path, size, buf, offset, fi->fh, fi->flags);
+                 "write", path, buf, size, offset, fi->fh, fi->flags);
 
     int ret; receive_response("{size: %d}", &ret); return ret;
 

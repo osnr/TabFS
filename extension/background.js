@@ -359,6 +359,7 @@ function findRoute(path) {
 
 let port;
 async function onMessage(req) {
+  if (req.buf) req.buf = atob(req.buf);
   console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
