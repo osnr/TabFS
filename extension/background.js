@@ -150,8 +150,7 @@ function fromScript(code) {
     async open({path}) { return { fh: 0 }; },
     async read({path, fh, size, offset}) {
       const tabId = parseInt(pathComponent(path, -2));
-      console.log(await browser.tabs.executeScript(tabId, {code})[0]);
-      return { buf: utf8(await browser.tabs.executeScript(tabId, {code})[0], offset, size) }
+      return { buf: utf8((await browser.tabs.executeScript(tabId, {code}))[0], offset, size) }
     }
   };
 }
