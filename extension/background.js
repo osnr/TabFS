@@ -40,6 +40,33 @@ function pathComponent(path, i) {
   return components[i >= 0 ? i : components.length + i];
 }
 function sanitize(s) { return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_'); }
+function utf8(str, offset, size) {
+  // converts to UTF8, then takes slice
+  var utf8 = [];
+  for (var i=0; i < str.length; i++) {
+    var charcode = str.charCodeAt(i);
+    if (charcode < 0x80) utf8.push(charcode);
+    else if (charcode < 0x800) {
+      utf8.push(0xc0 | (charcode >> 6), 
+                0x80 | (charcode & 0x3f));
+    }
+    else if (charcode < 0xd800 || charcode >= 0xe000) {
+      utf8.push(0xe0 | (charcode >> 12), 
+                0x80 | ((charcode>>6) & 0x3f), 
+                0x80 | (charcode & 0x3f));
+    }
+    // surrogate pair
+    else {
+      i++;
+      charcode = ((charcode&0x3ff)<<10)|(str.charCodeAt(i)&0x3ff)
+      utf8.push(0xf0 | (charcode >>18), 
+                0x80 | ((charcode>>12) & 0x3f), 
+                0x80 | ((charcode>>6) & 0x3f), 
+                0x80 | (charcode & 0x3f));
+    }
+  }
+  return String.fromCharCode(...utf8.slice(offset, offset + size))
+}
 function stringSize(str) {
   // returns the byte length of an utf8 string
   var s = str.length;
@@ -106,7 +133,7 @@ function withTab(handler) {
     async open({path}) { return { fh: 0 }; },
     async read({path, fh, size, offset}) {
       const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return { buf: handler(tab).substr(offset, size) };
+      return { buf: utf8(handler(tab), offset, size) };
     }
   };
 }
@@ -123,8 +150,8 @@ function fromScript(code) {
     async open({path}) { return { fh: 0 }; },
     async read({path, fh, size, offset}) {
       const tabId = parseInt(pathComponent(path, -2));
-      return { buf: (await browser.tabs.executeScript(tabId, {code}))[0]
-        .substr(offset, size) }
+      console.log(await browser.tabs.executeScript(tabId, {code})[0]);
+      return { buf: utf8(await browser.tabs.executeScript(tabId, {code})[0], offset, size) }
     }
   };
 }
@@ -145,9 +172,7 @@ router["/tabs/by-id/*/screenshot.png"] = {
     await sendDebuggerCommand(tabId, "Page.enable", {});
 
     const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
-    const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-    const slice = arr.slice(offset, offset + size);
-    return { buf: String.fromCharCode(...slice) };
+    return { buf: utf8(atob(data), offset, size) };
   }
 };
 router["/tabs/by-id/*/resources"] = {
@@ -211,11 +236,7 @@ router["/tabs/by-id/*/resources/*"] = {
           frameId: frameTree.frame.id,
           url: resource.url
         });
-        if (base64Encoded) {
-          const buf = btoa(atob(content).substr(offset, size));
-          return { buf, base64Encoded: true };
-        }
-        return content.substr(offset, size);
+        return { buf: utf8(base64Encoded ? atob(content) : content, offset, size) };
       }
     }
     throw new UnixError(unix.ENOENT);
@@ -379,7 +400,7 @@ async function onMessage(req) {
   try {
     response = await findRoute(req.path)[req.op](req);
     response.op = req.op;
-    if (response.buf) response.buf = btoa(response.buf);
+    if (response.buf) { response.buf = btoa(response.buf); }
 
   } catch (e) {
     console.error(e);
