@@ -171,7 +171,9 @@ router["/tabs/by-id/*/screenshot.png"] = {
     await sendDebuggerCommand(tabId, "Page.enable", {});
 
     const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
-    return { buf: utf8(atob(data), offset, size) };
+    const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    const slice = arr.slice(offset, offset + size);
+    return { buf: String.fromCharCode(...slice) };
   }
 };
 router["/tabs/by-id/*/resources"] = {
