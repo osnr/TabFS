@@ -212,7 +212,7 @@ tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int
 tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
     send_request("{op: %Q, path: %Q, fh: %d}",
-                 "release", path, fi->fh);
+                 "releasedir", path, fi->fh);
 
     receive_response("{}", NULL);
 

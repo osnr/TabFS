@@ -237,7 +237,13 @@ router["/tabs/by-id/*/resources/*"] = {
           frameId: frameTree.frame.id,
           url: resource.url
         });
-        return { buf: utf8(base64Encoded ? atob(content) : content, offset, size) };
+        if (base64Encoded) {
+          const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+          const slice = arr.slice(offset, offset + size);
+          return { buf: String.fromCharCode(...slice) };
+        } else {
+          return { buf: utf8(content, offset, size) };
+        }
       }
     }
     throw new UnixError(unix.ENOENT);
