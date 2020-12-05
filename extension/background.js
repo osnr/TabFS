@@ -85,9 +85,13 @@ async function debugTab(tabId) {
     debugging[tabId] += 1;
 
   } else {
-    await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
+    await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", function callback() {
       if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+        if (chrome.runtime.lastError.message.indexOf('Another debugger is already attached') !== -1) {
+          chrome.debugger.detach({tabId}, callback);
+        } else {
+          reject(chrome.runtime.lastError);
+        }
       } else {
         debugging[tabId] = 1;
         resolve();
@@ -99,11 +103,7 @@ function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
     chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
       console.log(method, result);
-      if (result) {
-        resolve(result);
-      } else {
-        reject(chrome.runtime.lastError);
-      }
+      if (result) { resolve(result); } else { reject(chrome.runtime.lastError); }
     })
   );
 }
@@ -194,7 +194,7 @@ router["/tabs/by-id/*/resources/*"] = {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
 
-    if (!debugging[tabId]) throw new UnixError(unix.EIO);
+    await debugTab(tabId);
 
     await sendDebuggerCommand(tabId, "Page.enable", {});
 
@@ -219,6 +219,8 @@ router["/tabs/by-id/*/resources/*"] = {
   },
   async open({path}) {
     // FIXME: cache the file
+    const tabId = parseInt(pathComponent(path, -3));
+    await debugTab(tabId);
     return {fh: 3};
   },
   async read({path, fh, size, offset}) {
@@ -238,7 +240,7 @@ router["/tabs/by-id/*/resources/*"] = {
           url: resource.url
         });
         if (base64Encoded) {
-          const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+          const arr = Uint8Array.from(atob(content), c => c.charCodeAt(0));
           const slice = arr.slice(offset, offset + size);
           return { buf: String.fromCharCode(...slice) };
         } else {
@@ -249,6 +251,7 @@ router["/tabs/by-id/*/resources/*"] = {
     throw new UnixError(unix.ENOENT);
   },
   async release({path, fh}) {
+    // FIXME: free the debug?
     return {};
   }
 };
@@ -400,7 +403,7 @@ function findRoute(path) {
 let port;
 async function onMessage(req) {
   if (req.buf) req.buf = atob(req.buf);
-  console.log('req', req);
+  /* console.log('req', req);*/
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
@@ -418,7 +421,7 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  console.log('resp', response);
+  /* console.log('resp', response);*/
   port.postMessage(response);
 };
 
