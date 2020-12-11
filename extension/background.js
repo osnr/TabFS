@@ -133,40 +133,6 @@ const BrowserState = { lastFocusedWindowId: null };
    view of what the whole filesystem looks like at a glance. */
 const router = {};
 
-function withTab(handler) {
-  return {
-    async getattr({path}) {
-      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return {
-        st_mode: unix.S_IFREG | 0444,
-        st_nlink: 1,
-        st_size: stringSize(handler(tab))
-      };
-    },
-    async open({path}) { return { fh: 0 }; },
-    async read({path, fh, size, offset}) {
-      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return { buf: utf8(handler(tab), offset, size) };
-    }
-  };
-}
-function fromScript(code) {
-  return {
-    async getattr({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
-      return {
-        st_mode: unix.S_IFREG | 0444,
-        st_nlink: 1,
-        st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
-      };
-    },
-    async open({path}) { return { fh: 0 }; },
-    async read({path, fh, size, offset}) {
-      const tabId = parseInt(pathComponent(path, -2));
-      return { buf: utf8((await browser.tabs.executeScript(tabId, {code}))[0], offset, size) }
-    }
-  };
-}
 const Cache = {
   // used when you open a file to cache the content we got from the browser
   // until you close that file.
@@ -186,14 +152,45 @@ router["/tabs/by-id"] = {
     return { entries: tabs.map(tab => String(tab.id)) };
   }
 };
-router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
-router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
-router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
+(function() {
+  const withTab = handler => ({
+    async getattr({path}) {
+      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
+      return {
+        st_mode: unix.S_IFREG | 0444,
+        st_nlink: 1,
+        st_size: stringSize(handler(tab))
+      };
+    },
+    async open({path}) { return { fh: 0 }; },
+    async read({path, fh, size, offset}) {
+      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
+      return { buf: utf8(handler(tab), offset, size) };
+    }
+  });
+  const fromScript = code => ({
+    async getattr({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return {
+        st_mode: unix.S_IFREG | 0444,
+        st_nlink: 1,
+        st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
+      };
+    },
+    async open({path}) { return { fh: 0 }; },
+    async read({path, fh, size, offset}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return { buf: utf8((await browser.tabs.executeScript(tabId, {code}))[0], offset, size) }
+    }
+  });
+  router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
+  router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
+  router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
+})();
 router["/tabs/by-id/*/screenshot.png"] = {
   async open({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-    // FIXME: cache.
 
     const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
     return { fh: Cache.storeObject(Uint8Array.from(atob(data), c => c.charCodeAt(0))) };
