@@ -79,40 +79,53 @@ function stringSize(str) {
   return s + 1;
 }
 
-const debugging = {};
-async function debugTab(tabId) {
-  if (debugging[tabId]) {
-    debugging[tabId] += 1;
+const TabManager = {
+  tabState: {},
 
-  } else {
-    await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", function callback() {
-      if (chrome.runtime.lastError) {
-        if (chrome.runtime.lastError.message.indexOf('Another debugger is already attached') !== -1) {
-          chrome.debugger.detach({tabId}, callback);
-        } else {
-          reject(chrome.runtime.lastError);
+  debugTab: async function(tabId) {
+    this.tabState[tabId] = this.tabState[tabId] || {};
+    if (this.tabState[tabId].debugging) {
+      this.tabState[tabId].debugging += 1;
+
+    } else {
+      await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", async () => {
+        if (chrome.runtime.lastError) {
+          if (chrome.runtime.lastError.message.indexOf('Another debugger is already attached') !== -1) {
+            chrome.debugger.detach({tabId}, () => {this.debugTab(tabId)});
+          } else {
+            reject(chrome.runtime.lastError); return;
+          }
+          return;
         }
-      } else {
-        debugging[tabId] = 1;
-        resolve();
-      }
-    }));
+        this.tabState[tabId].debugging = 1; resolve();
+      }));
+    }
+  },
+  enableDomainForTab: async function(tabId, domain) {
+    this.tabState[tabId] = this.tabState[tabId] || {};
+    if (this.tabState[tabId][domain]) { this.tabState[tabId][domain] += 1;
+    } else {
+      await sendDebuggerCommand(tabId, `${domain}.enable`, {});
+      this.tabState[tabId][domain] = 1;
+    }
   }
-}
+};
+
 function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
     chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
-      console.log(method, result);
       if (result) { resolve(result); } else { reject(chrome.runtime.lastError); }
     })
   );
 }
 
-let lastFocusedWindowId;
-browser.windows.getLastFocused().then(window => { lastFocusedWindowId = window.id; });
-browser.windows.onFocusChanged.addListener(windowId => {
-  if (windowId !== -1) lastFocusedWindowId = windowId;
-});
+const BrowserState = { lastFocusedWindowId: null };
+(function() {
+  browser.windows.getLastFocused().then(window => { BrowserState.lastFocusedWindowId = window.id; });
+  browser.windows.onFocusChanged.addListener(windowId => {
+    if (windowId !== -1) BrowserState.lastFocusedWindowId = windowId;
+  });
+})();
 
 /* if I could specify a custom editor interface for all the routing
    below ... I would highlight the route names in blocks of some color
@@ -154,6 +167,18 @@ function fromScript(code) {
     }
   };
 }
+const Cache = {
+  // used when you open a file to cache the content we got from the browser
+  // until you close that file.
+  store: {}, nextHandle: 0,
+  storeObject(object) {
+    const handle = ++this.nextHandle;
+    this.store[handle] = object;
+    return handle;
+  },
+  getObjectForHandle(handle) { return this.store[handle]; },
+  removeObjectForHandle(handle) { delete this.store[handle]; }
+};
 
 router["/tabs/by-id"] = {  
   async readdir() {
@@ -165,21 +190,24 @@ router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
 router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
 router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 router["/tabs/by-id/*/screenshot.png"] = {
-  async read({path, fh, size, offset}) {
+  async open({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    await debugTab(tabId);
-    await sendDebuggerCommand(tabId, "Page.enable", {});
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
+    // FIXME: cache.
 
     const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
-    const arr = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-    const slice = arr.slice(offset, offset + size);
+    return { fh: Cache.storeObject(Uint8Array.from(atob(data), c => c.charCodeAt(0))) };
+  },
+  async read({path, fh, size, offset}) {
+    const slice = Cache.getObjectForHandle(fh).slice(offset, offset + size);
     return { buf: String.fromCharCode(...slice) };
-  }
+  },
+  async close({fh}) { Cache.removeObjectForHandle(fh); }
 };
 router["/tabs/by-id/*/resources"] = {
   async opendir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    await debugTab(tabId);
+    await TabManager.debugTab(tabId);
     return { fh: 0 };
   },
   async readdir({path}) {
@@ -194,9 +222,7 @@ router["/tabs/by-id/*/resources/*"] = {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
 
-    await debugTab(tabId);
-
-    await sendDebuggerCommand(tabId, "Page.enable", {});
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     for (let resource of frameTree.resources) {
@@ -218,20 +244,16 @@ router["/tabs/by-id/*/resources/*"] = {
     }
   },
   async open({path}) {
-    // FIXME: cache the file
+    // FIXME: cache the file.
     const tabId = parseInt(pathComponent(path, -3));
-    await debugTab(tabId);
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
     return {fh: 3};
   },
   async read({path, fh, size, offset}) {
     const tabId = parseInt(pathComponent(path, -3));
     const suffix = pathComponent(path, -1);
 
-    if (!debugging[tabId]) throw new UnixError(unix.EIO);
-
-    await sendDebuggerCommand(tabId, "Page.enable", {});
-
-    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {}); // FIXME: cache this
     for (let resource of frameTree.resources) {
       const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
       if (resourceSuffix === suffix) {
@@ -285,7 +307,7 @@ router["/tabs/by-title/*"] = {
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
-    const id = (await browser.tabs.query({ active: true, windowId: lastFocusedWindowId }))[0].id;
+    const id = (await browser.tabs.query({ active: true, windowId: BrowserState.lastFocusedWindowId }))[0].id;
     return { buf: "by-id/" + id };
   }
 }
