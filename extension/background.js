@@ -169,20 +169,13 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 })();
-router["/tabs/by-id/*/screenshot.png"] = {
-  async open({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
+router["/tabs/by-id/*/screenshot.png"] = fromStringMaker(async path => {
+  const tabId = parseInt(pathComponent(path, -2));
+  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
-    const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
-    return { fh: Cache.storeObject(Uint8Array.from(atob(data), c => c.charCodeAt(0))) };
-  },
-  async read({path, fh, size, offset}) {
-    const slice = Cache.getObjectForHandle(fh).slice(offset, offset + size);
-    return { buf: String.fromCharCode(...slice) };
-  },
-  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
-};
+  const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
+  return Uint8Array.from(atob(data), c => c.charCodeAt(0));
+});
 router["/tabs/by-id/*/resources"] = {
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
