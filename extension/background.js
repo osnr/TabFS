@@ -153,36 +153,30 @@ router["/tabs/by-id"] = {
   }
 };
 (function() {
-  const withTab = handler => ({
+  const fromStringMaker = stringMaker => ({
     async getattr({path}) {
-      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
       return {
         st_mode: unix.S_IFREG | 0444,
         st_nlink: 1,
-        st_size: stringSize(handler(tab))
+        st_size: stringSize(stringMaker(path))
       };
     },
-    async open({path}) { return { fh: 0 }; },
+    async open({path}) { return { fh: Cache.storeObject(await stringMaker(path)) }; },
     async read({path, fh, size, offset}) {
-      const tab = await browser.tabs.get(parseInt(pathComponent(path, -2)));
-      return { buf: utf8(handler(tab), offset, size) };
-    }
-  });
-  const fromScript = code => ({
-    async getattr({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
-      return {
-        st_mode: unix.S_IFREG | 0444,
-        st_nlink: 1,
-        st_size: stringSize((await browser.tabs.executeScript(tabId, {code}))[0])
-      };
+      return { buf: utf8(Cache.getObjectForHandle(fh), offset, size) }
     },
-    async open({path}) { return { fh: 0 }; },
-    async read({path, fh, size, offset}) {
-      const tabId = parseInt(pathComponent(path, -2));
-      return { buf: utf8((await browser.tabs.executeScript(tabId, {code}))[0], offset, size) }
-    }
+    async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
   });
+  const withTab = handler => fromStringMaker(async path => {
+    const tabId = parseInt(pathComponent(path, -2));
+    const tab = await browser.tabs.get(tabId);
+    return handler(tab);
+  });
+  const fromScript = code => fromStringMaker(async path => {
+    const tabId = parseInt(pathComponent(path, -2));
+    return (await browser.tabs.executeScript(tabId, {code}))[0];
+  });
+
   router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
   router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
@@ -199,7 +193,7 @@ router["/tabs/by-id/*/screenshot.png"] = {
     const slice = Cache.getObjectForHandle(fh).slice(offset, offset + size);
     return { buf: String.fromCharCode(...slice) };
   },
-  async close({fh}) { Cache.removeObjectForHandle(fh); }
+  async release({fh}) { Cache.removeObjectForHandle(fh); }
 };
 router["/tabs/by-id/*/resources"] = {
   async opendir({path}) {
