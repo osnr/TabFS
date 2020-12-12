@@ -24,17 +24,6 @@ class UnixError extends Error {
   constructor(error) { super(); this.name = "UnixError"; this.error = error; }
 }
 
-// tabs/by-id/ID/title
-// tabs/by-id/ID/url
-// tabs/by-id/ID/console
-// tabs/by-id/ID/mem (?)
-// tabs/by-id/ID/cpu (?)
-// tabs/by-id/ID/screenshot.png
-// tabs/by-id/ID/text.txt
-// tabs/by-id/ID/printed.pdf
-// tabs/by-id/ID/control
-// tabs/by-id/ID/sources/
-
 function pathComponent(path, i) {
   const components = path.split('/');
   return components[i >= 0 ? i : components.length + i];
@@ -79,7 +68,10 @@ const TabManager = {
       await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", async () => {
         if (chrome.runtime.lastError) {
           if (chrome.runtime.lastError.message.indexOf('Another debugger is already attached') !== -1) {
-            chrome.debugger.detach({tabId}, () => {this.debugTab(tabId)});
+            chrome.debugger.detach({tabId}, async () => {
+              await TabManager.debugTab(tabId);
+              resolve();
+            });
           } else {
             reject(chrome.runtime.lastError); return;
           }
@@ -107,11 +99,19 @@ function sendDebuggerCommand(tabId, method, commandParams) {
   );
 }
 
-const BrowserState = { lastFocusedWindowId: null };
+const BrowserState = { lastFocusedWindowId: null, scriptsForTab: {} };
 (function() {
   browser.windows.getLastFocused().then(window => { BrowserState.lastFocusedWindowId = window.id; });
   browser.windows.onFocusChanged.addListener(windowId => {
     if (windowId !== -1) BrowserState.lastFocusedWindowId = windowId;
+  });
+
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    console.log(source, method, params);
+    if (method === "Debugger.scriptParsed") {
+      BrowserState.scriptsForTab[source.tabId] = BrowserState.scriptsForTab[source.tabId] || [];
+      BrowserState.scriptsForTab[source.tabId].push(params);
+    }
   });
 })();
 
@@ -154,6 +154,23 @@ router["/tabs/by-id"] = {
     return { entries: tabs.map(tab => String(tab.id)) };
   }
 };
+// (should these have .txt extensions?)
+// title
+// url
+// text
+// TODO: document.html
+
+// TODO: console
+// TODO: mem (?)
+// TODO: cpu (?)
+
+// screenshot.png (TODO: when unfocused?)
+// TODO: archive.mhtml ?
+// TODO: printed.pdf
+// control
+// resources/
+// TODO: scripts/
+
 (function() {
   const withTab = handler => fromStringMaker(async path => {
     const tabId = parseInt(pathComponent(path, -2));
@@ -179,7 +196,7 @@ router["/tabs/by-id/*/screenshot.png"] = fromStringMaker(async path => {
 router["/tabs/by-id/*/resources"] = {
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    await TabManager.debugTab(tabId);
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };
   }
@@ -203,6 +220,19 @@ router["/tabs/by-id/*/resources/*"] = fromStringMaker(async path => {
   }
   throw new UnixError(unix.ENOENT);
 });
+router["/tabs/by-id/*/scripts"] = {
+  async opendir({path}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+    return { fh: 0 };
+  },
+  async readdir({path}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    return { entries: BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200)) };
+    /* const {frameTree} = await sendDebuggerCommand(tabId, "Debugger.scriptParsed", {});
+     * return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };*/
+  }
+};
 
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
@@ -351,7 +381,7 @@ function findRoute(path) {
 let port;
 async function onMessage(req) {
   if (req.buf) req.buf = atob(req.buf);
-  /* console.log('req', req);*/
+  console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
   /* console.time(req.op + ':' + req.path);*/
@@ -369,7 +399,7 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  /* console.log('resp', response);*/
+  console.log('resp', response);
   port.postMessage(response);
 };
 
