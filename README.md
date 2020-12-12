@@ -1,11 +1,18 @@
 # TabFS
 
-Mount your browser tabs as a filesystem!
+TabFS is a browser extension that mounts your browser tabs as a
+filesystem on your computer.
+
+Out of the box, it supports Chrome and (to a lesser extent) Firefox,
+on macOS and Linux; it could probably be made to work on other
+browsers like Safari and Opera that support the WebExtensions API, but
+I haven't looked into it.
 
 <img src="doc/finder.png" width="500">
 
-Each of your open tabs is mapped to a folder with a bunch of control
-and live-updating content files inside it. (TODO: update as I add more)
+Each of your open tabs is mapped to a folder with a bunch of files
+inside it. These files directly reflect (and can control) the state of
+that tab. (TODO: update as I add more)
 
 <img src="doc/finder-contents.png" width="500">
 
@@ -13,7 +20,7 @@ This gives you a _ton_ of power, because now you can apply [all the
 existing tools](https://twitter.com/rsnous/status/1018570020324962305)
 on your computer that already know how to deal with files -- terminal
 commands, scripting languages, etc -- and use them to control and draw
-information from your browser. You don't need to write a browser
+information out of your browser. You don't need to code up a browser
 extension from scratch every time you want to do anything.
 
 ## Examples of stuff you can do!
@@ -43,15 +50,16 @@ $ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 
 ### Save text of all tabs to a file
 
-(wip, FIXME)
-
 ```
 $ cat mnt/tabs/by-id/*/text > text.txt
 ```
 
 ## Setup
 
-**disclaimer**: security, functionality
+**disclaimer**: security, functionality. In some sense, the whole
+point of this extension is to create a gigantic new surface area of
+communication between stuff inside your browser and the rest of your
+computer.
 
 First, install the browser extension.
 
@@ -59,9 +67,10 @@ Then, install the C filesystem.
 
 ### 1. Install the browser extension
 
-(I think it will work on Edge or Opera or whatever, too. You'll need
-to change the native messaging path in install.sh in those cases. Not
-sure about Safari.)
+(I think for Opera or whatever other Chromium-based browser, you could
+get it to work, but you'd need to change the native messaging path in
+install.sh. Not sure about Safari. maybe Edge too? if you also got
+everything to compile for Windows)
 
 #### in Chrome
 
@@ -103,7 +112,8 @@ extension can launch and talk to the filesystem:
 
 #### Chrome and Chromium
 
-Use the extension ID you copied earlier.
+Substitute the extension ID you copied earlier for
+`jimpolemfaeckpjijgapgkmolankohgj` in the command below.
 
 ```
 $ ./install.sh chrome jimpolemfaeckpjijgapgkmolankohgj
@@ -178,15 +188,18 @@ GPLv3
 
 processes as files. the real process is the browser. 
 
-browser and Unix
+browser and Unix; the two operating systems
 
-it's way too hard to make an extension. even 'make an extension' is
-a bad framing. lightness
+it's way too hard to make an extension. even 'make an extension' is a
+bad framing; it suggests making an extension is a whole Thing, a whole
+Project. like, why can't I just take a minute to ask my browser a
+question or tell it to automate something? lightness
 
 open input space -- filesystem
 
 now you have this whole 'language', this whole toolset, to control and
-automate your browser
+automate your browser. there's this built-up existing capital where
+lots of people already know the operations to work with files
 
 OSQuery
 
