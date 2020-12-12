@@ -203,7 +203,6 @@ router["/tabs/by-id/*/resources"] = {
 };
 router["/tabs/by-id/*/resources/*"] = fromStringMaker(async path => {
   const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-
   await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
   const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -228,11 +227,17 @@ router["/tabs/by-id/*/scripts"] = {
   },
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    return { entries: BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200)) };
-    /* const {frameTree} = await sendDebuggerCommand(tabId, "Debugger.scriptParsed", {});
-     * return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };*/
+    return { entries: BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId) };
   }
 };
+router["/tabs/by-id/*/scripts/*"] = fromStringMaker(async path => {
+  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+
+  const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+  const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
+  return scriptSource;
+});
 
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
@@ -254,8 +259,7 @@ router["/tabs/by-title"] = {
 router["/tabs/by-title/*"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
-    const parts = path.split("_");
-    const id = parts[parts.length - 1];
+    const parts = path.split("_"); const id = parts[parts.length - 1];
     return { buf: "../by-id/" + id };
   }
 };
