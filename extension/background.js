@@ -40,8 +40,7 @@ function pathComponent(path, i) {
   return components[i >= 0 ? i : components.length + i];
 }
 function sanitize(s) { return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_'); }
-function utf8(str, offset, size) {
-  // converts to UTF8, then takes slice
+function utf8(str) {
   var utf8 = [];
   for (var i=0; i < str.length; i++) {
     var charcode = str.charCodeAt(i);
@@ -65,18 +64,7 @@ function utf8(str, offset, size) {
                 0x80 | (charcode & 0x3f));
     }
   }
-  return String.fromCharCode(...utf8.slice(offset, offset + size))
-}
-function stringSize(str) {
-  // returns the byte length of an utf8 string
-  var s = str.length;
-  for (var i=str.length-1; i>=0; i--) {
-    var code = str.charCodeAt(i);
-    if (code > 0x7f && code <= 0x7ff) s++;
-    else if (code > 0x7ff && code <= 0xffff) s+=2;
-    if (code >= 0xDC00 && code <= 0xDFFF) i--; //trail surrogate
-  }
-  return s + 1;
+  return utf8;
 }
 
 const TabManager = {
@@ -127,10 +115,6 @@ const BrowserState = { lastFocusedWindowId: null };
   });
 })();
 
-/* if I could specify a custom editor interface for all the routing
-   below ... I would highlight the route names in blocks of some color
-   that sticks out, and let you collapse them. then you could get a
-   view of what the whole filesystem looks like at a glance. */
 const router = {};
 
 const Cache = {
@@ -145,6 +129,24 @@ const Cache = {
   getObjectForHandle(handle) { return this.store[handle]; },
   removeObjectForHandle(handle) { delete this.store[handle]; }
 };
+function toArray(stringOrArray) {
+  if (typeof stringOrArray == 'string') { return utf8(stringOrArray); }
+  else { return stringOrArray; }
+}
+const fromStringMaker = stringMaker => ({
+  async getattr({path}) {
+    return {
+      st_mode: unix.S_IFREG | 0444,
+      st_nlink: 1,
+      st_size: toArray(await stringMaker(path)).length
+    };
+  },
+  async open({path}) { return { fh: Cache.storeObject(toArray(await stringMaker(path))) }; },
+  async read({path, fh, size, offset}) {
+    return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
+  },
+  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
+});
 
 router["/tabs/by-id"] = {  
   async readdir() {
@@ -153,20 +155,6 @@ router["/tabs/by-id"] = {
   }
 };
 (function() {
-  const fromStringMaker = stringMaker => ({
-    async getattr({path}) {
-      return {
-        st_mode: unix.S_IFREG | 0444,
-        st_nlink: 1,
-        st_size: stringSize(stringMaker(path))
-      };
-    },
-    async open({path}) { return { fh: Cache.storeObject(await stringMaker(path)) }; },
-    async read({path, fh, size, offset}) {
-      return { buf: utf8(Cache.getObjectForHandle(fh), offset, size) }
-    },
-    async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
-  });
   const withTab = handler => fromStringMaker(async path => {
     const tabId = parseInt(pathComponent(path, -2));
     const tab = await browser.tabs.get(tabId);
@@ -193,81 +181,35 @@ router["/tabs/by-id/*/screenshot.png"] = {
     const slice = Cache.getObjectForHandle(fh).slice(offset, offset + size);
     return { buf: String.fromCharCode(...slice) };
   },
-  async release({fh}) { Cache.removeObjectForHandle(fh); }
+  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
 };
 router["/tabs/by-id/*/resources"] = {
-  async opendir({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    await TabManager.debugTab(tabId);
-    return { fh: 0 };
-  },
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
+    await TabManager.debugTab(tabId);
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };
   }
 };
-router["/tabs/by-id/*/resources/*"] = {
-  async getattr({path}) {
-    // FIXME: cache the file
-    const tabId = parseInt(pathComponent(path, -3));
-    const suffix = pathComponent(path, -1);
+router["/tabs/by-id/*/resources/*"] = fromStringMaker(async path => {
+  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
 
-    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
+  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
-    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-    for (let resource of frameTree.resources) {
-      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
-      if (resourceSuffix === suffix) {
-        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
-          frameId: frameTree.frame.id,
-          url: resource.url
-        });
-        if (base64Encoded) {
-          content = atob(content);
-        }
-        return {
-          st_mode: unix.S_IFREG | 0444,
-          st_nlink: 1,
-          st_size: stringSize(content) // FIXME
-        };
-      }
+  const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+  for (let resource of frameTree.resources) {
+    const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+    if (resourceSuffix === suffix) {
+      let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+        frameId: frameTree.frame.id,
+        url: resource.url
+      });
+      if (base64Encoded) { return Uint8Array.from(atob(content), c => c.charCodeAt(0)); }
+      return content;
     }
-  },
-  async open({path}) {
-    // FIXME: cache the file.
-    const tabId = parseInt(pathComponent(path, -3));
-    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-    return {fh: 3};
-  },
-  async read({path, fh, size, offset}) {
-    const tabId = parseInt(pathComponent(path, -3));
-    const suffix = pathComponent(path, -1);
-
-    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {}); // FIXME: cache this
-    for (let resource of frameTree.resources) {
-      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
-      if (resourceSuffix === suffix) {
-        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
-          frameId: frameTree.frame.id,
-          url: resource.url
-        });
-        if (base64Encoded) {
-          const arr = Uint8Array.from(atob(content), c => c.charCodeAt(0));
-          const slice = arr.slice(offset, offset + size);
-          return { buf: String.fromCharCode(...slice) };
-        } else {
-          return { buf: utf8(content, offset, size) };
-        }
-      }
-    }
-    throw new UnixError(unix.ENOENT);
-  },
-  async release({path, fh}) {
-    // FIXME: free the debug?
-    return {};
   }
-};
+  throw new UnixError(unix.ENOENT);
+});
 
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
