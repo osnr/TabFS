@@ -111,6 +111,7 @@ const BrowserState = { lastFocusedWindowId: null, scriptsForTab: {} };
     if (method === "Debugger.scriptParsed") {
       BrowserState.scriptsForTab[source.tabId] = BrowserState.scriptsForTab[source.tabId] || [];
       BrowserState.scriptsForTab[source.tabId].push(params);
+      // FIXME: clear these out when page changes in tab (how?)
     }
   });
 })();
@@ -133,17 +134,21 @@ function toArray(stringOrArray) {
   if (typeof stringOrArray == 'string') { return utf8(stringOrArray); }
   else { return stringOrArray; }
 }
-const fromStringMaker = stringMaker => ({
+const defineFile = (getData, setData) => ({
   async getattr({path}) {
     return {
-      st_mode: unix.S_IFREG | 0444,
+      st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
       st_nlink: 1,
-      st_size: toArray(await stringMaker(path)).length
+      st_size: toArray(await getData(path)).length
     };
   },
-  async open({path}) { return { fh: Cache.storeObject(toArray(await stringMaker(path))) }; },
+  async open({path}) { return { fh: Cache.storeObject(toArray(await getData(path))) }; },
   async read({path, fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
+  },
+  async write({path, buf}) {
+    // FIXME: patch
+    setData(path, buf); return {size: utf8(buf).length};
   },
   async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
 });
@@ -172,12 +177,12 @@ router["/tabs/by-id"] = {
 // TODO: scripts/
 
 (function() {
-  const withTab = handler => fromStringMaker(async path => {
+  const withTab = handler => defineFile(async path => {
     const tabId = parseInt(pathComponent(path, -2));
     const tab = await browser.tabs.get(tabId);
     return handler(tab);
   });
-  const fromScript = code => fromStringMaker(async path => {
+  const fromScript = code => defineFile(async path => {
     const tabId = parseInt(pathComponent(path, -2));
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
@@ -186,7 +191,7 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 })();
-router["/tabs/by-id/*/screenshot.png"] = fromStringMaker(async path => {
+router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
   const tabId = parseInt(pathComponent(path, -2));
   await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
@@ -201,7 +206,7 @@ router["/tabs/by-id/*/resources"] = {
     return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };
   }
 };
-router["/tabs/by-id/*/resources/*"] = fromStringMaker(async path => {
+router["/tabs/by-id/*/resources/*"] = defineFile(async path => {
   const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
   await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
@@ -230,13 +235,21 @@ router["/tabs/by-id/*/scripts"] = {
     return { entries: BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId) };
   }
 };
-router["/tabs/by-id/*/scripts/*"] = fromStringMaker(async path => {
+router["/tabs/by-id/*/scripts/*"] = defineFile(async path => {
   const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
   await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
   const parts = path.split("_"); const scriptId = parts[parts.length - 1];
   const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
   return scriptSource;
+
+}, async (path, buf) => {
+  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+
+  const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+  await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
+  return {};
 });
 
 router["/tabs/by-id/*/control"] = {
@@ -247,6 +260,7 @@ router["/tabs/by-id/*/control"] = {
     // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
     // see https://developer.chrome.com/extensions/tabs
     await new Promise(resolve => chrome.tabs[command](tabId, resolve));
+    return {size: utf8(buf).length};
   }
 };
 

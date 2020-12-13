@@ -201,6 +201,8 @@ now you have this whole 'language', this whole toolset, to control and
 automate your browser. there's this built-up existing capital where
 lots of people already know the operations to work with files
 
+this project is cool bc i immediately get a dataset i care about
+
 OSQuery
 
 fake filesystems talk
