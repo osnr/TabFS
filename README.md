@@ -54,12 +54,16 @@ $ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 $ cat mnt/tabs/by-id/*/text > text.txt
 ```
 
+### TODO: Manage tabs in Emacs dired
+
+I do this
+
 ## Setup
 
 **disclaimer**: security, functionality. In some sense, the whole
 point of this extension is to create a gigantic new surface area of
 communication between stuff inside your browser and the rest of your
-computer.
+computer. permissions
 
 First, install the browser extension.
 

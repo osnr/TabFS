@@ -225,9 +225,18 @@ tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
     /* }); */
 }
 
+static int tabfs_unlink(const char *path) {
+    send_request("{op: %Q, path: %Q}", "unlink", path);
+
+    receive_response("{}", NULL);
+
+    return 0;
+}
+
 static struct fuse_operations tabfs_filesystem_operations = {
     .getattr  = tabfs_getattr, /* To provide size, permissions, etc. */
     .readlink = tabfs_readlink,
+
     .open     = tabfs_open,    /* To enforce read-only access.       */
     .read     = tabfs_read,    /* To provide file content.           */
     .write    = tabfs_write,
@@ -235,7 +244,9 @@ static struct fuse_operations tabfs_filesystem_operations = {
 
     .opendir  = tabfs_opendir,
     .readdir  = tabfs_readdir, /* To provide directory listing.      */
-    .releasedir = tabfs_releasedir
+    .releasedir = tabfs_releasedir,
+
+    .unlink = tabfs_unlink
 };
 
 int main(int argc, char **argv) {

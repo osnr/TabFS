@@ -156,7 +156,7 @@ const defineFile = (getData, setData) => ({
 router["/tabs/by-id"] = {  
   async readdir() {
     const tabs = await browser.tabs.query({});
-    return { entries: tabs.map(tab => String(tab.id)) };
+    return { entries: [".", "..", ...tabs.map(tab => String(tab.id))] };
   }
 };
 // (should these have .txt extensions?)
@@ -169,7 +169,7 @@ router["/tabs/by-id"] = {
 // TODO: mem (?)
 // TODO: cpu (?)
 
-// screenshot.png (TODO: when unfocused?)
+// screenshot.png (FIXME: how to keep from blocking when unfocused?)
 // TODO: archive.mhtml ?
 // TODO: printed.pdf
 // control
@@ -203,7 +203,7 @@ router["/tabs/by-id/*/resources"] = {
     const tabId = parseInt(pathComponent(path, -2));
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-    return { entries: frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200))) };
+    return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)))] };
   }
 };
 router["/tabs/by-id/*/resources/*"] = defineFile(async path => {
@@ -232,7 +232,7 @@ router["/tabs/by-id/*/scripts"] = {
   },
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    return { entries: BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId) };
+    return { entries: [".", "..", ...BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
   }
 };
 router["/tabs/by-id/*/scripts/*"] = defineFile(async path => {
@@ -265,9 +265,16 @@ router["/tabs/by-id/*/control"] = {
 };
 
 router["/tabs/by-title"] = {
+  getattr() { 
+    return {
+      st_mode: unix.S_IFDIR | 0777,
+      st_nlink: 3,
+      st_size: 0,
+    };
+  },
   async readdir() {
     const tabs = await browser.tabs.query({});
-    return { entries: tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id)) };
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id))] };
   }
 };
 router["/tabs/by-title/*"] = {
@@ -304,7 +311,7 @@ for (let key in router) {
                                       (k.match(/\//g) || []).length ===
                                         (path.match(/\//g) || []).length + 1)
                            .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
-      children = [...new Set(children)];
+      children = [".", "..", ...new Set(children)];
 
       router[path] = { readdir() { return { entries: children }; } };
     }
@@ -342,7 +349,7 @@ for (let key in router) {
   } else if (router[key].readlink) {
     router[key] = {
       async getattr({path}) {
-        const st_size = (await this.readlink({path})).length + 1;
+        const st_size = (await this.readlink({path})).buf.length + 1;
         return {
           st_mode: unix.S_IFLNK | 0444,
           st_nlink: 1,
