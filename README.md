@@ -45,6 +45,12 @@ Home / Twitter
 ### Close all Stack Overflow tabs
 
 ```
+$ rm mnt/tabs/by-title/*Stack_Overflow*
+```
+
+or (older)
+
+```
 $ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 ```
 
@@ -60,10 +66,10 @@ I do this
 
 ## Setup
 
-**disclaimer**: security, functionality. In some sense, the whole
-point of this extension is to create a gigantic new surface area of
-communication between stuff inside your browser and the rest of your
-computer. permissions
+**disclaimer**: security, functionality, blah blah. applications may
+freeze ... In some sense, the whole point of this extension is to
+create a gigantic new surface area of communication between stuff
+inside your browser and software on the rest of your computer.
 
 First, install the browser extension.
 

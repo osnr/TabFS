@@ -148,7 +148,7 @@ const defineFile = (getData, setData) => ({
   },
   async write({path, buf}) {
     // FIXME: patch
-    setData(path, buf); return {size: utf8(buf).length};
+    setData(path, buf); return { size: utf8(buf).length };
   },
   async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
 });
@@ -177,17 +177,21 @@ router["/tabs/by-id"] = {
 // TODO: scripts/
 
 (function() {
-  const withTab = handler => defineFile(async path => {
+  const withTab = (readHandler, writeHandler) => defineFile(async path => {
     const tabId = parseInt(pathComponent(path, -2));
     const tab = await browser.tabs.get(tabId);
-    return handler(tab);
-  });
+    return readHandler(tab);
+
+  }, writeHandler ? async (path, buf) => {
+    const tabId = parseInt(pathComponent(path, -2));
+    await browser.tabs.update(tabId, writeHandler(buf));
+  } : undefined);
   const fromScript = code => defineFile(async path => {
     const tabId = parseInt(pathComponent(path, -2));
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
-  router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n");
+  router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
   router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
 })();
@@ -259,7 +263,7 @@ router["/tabs/by-id/*/control"] = {
     const command = buf.trim();
     // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
     // see https://developer.chrome.com/extensions/tabs
-    await new Promise(resolve => chrome.tabs[command](tabId, resolve));
+    await browser.tabs[command](tabId);
     return {size: utf8(buf).length};
   }
 };
@@ -280,8 +284,13 @@ router["/tabs/by-title"] = {
 router["/tabs/by-title/*"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
-    const parts = path.split("_"); const id = parts[parts.length - 1];
-    return { buf: "../by-id/" + id };
+    const parts = path.split("_"); const tabId = parts[parts.length - 1];
+    return { buf: "../by-id/" + tabId };
+  },
+  async unlink({path}) {
+    const parts = path.split("_"); const tabId = parseInt(parts[parts.length - 1]);
+    await browser.tabs.remove(tabId);
+    return {};
   }
 };
 
