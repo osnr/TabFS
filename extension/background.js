@@ -142,15 +142,25 @@ const defineFile = (getData, setData) => ({
       st_size: toArray(await getData(path)).length
     };
   },
+
   async open({path}) { return { fh: Cache.storeObject(toArray(await getData(path))) }; },
   async read({path, fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
   },
   async write({path, buf}) {
     // FIXME: patch
+    // I guess caller should override write() if they want to actually
+    // patch and not just re-set the whole string (for example,
+    // if they want to hot-reload just one function the user modified)
     setData(path, buf); return { size: utf8(buf).length };
   },
-  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; }
+  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
+
+  async truncate({path, size}) {
+    // TODO: weird case if they truncate while the file is open
+    // (but `echo hi > foo.txt` uses O_TRUNC which doesn't do that)
+    setData(path, (await getData(path)).truncate(size)); return {};
+  }
 });
 
 router["/tabs/by-id"] = {  
@@ -169,12 +179,15 @@ router["/tabs/by-id"] = {
 // TODO: mem (?)
 // TODO: cpu (?)
 
+// TODO: dom/ ?
+// TODO: globals/ ?
+
 // screenshot.png (FIXME: how to keep from blocking when unfocused?)
 // TODO: archive.mhtml ?
 // TODO: printed.pdf
 // control
 // resources/
-// TODO: scripts/
+// TODO: scripts/ TODO: allow creation, eval immediately
 
 (function() {
   const withTab = (readHandler, writeHandler) => defineFile(async path => {

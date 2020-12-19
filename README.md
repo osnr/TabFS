@@ -64,6 +64,13 @@ $ cat mnt/tabs/by-id/*/text > text.txt
 
 I do this
 
+### TODO: Live edit
+
+
+
+### TODO: Something with live view of variables
+
+
 ## Setup
 
 **disclaimer**: security, functionality, blah blah. applications may

@@ -105,31 +105,6 @@ tabfs_read(const char *path, char *buf, size_t size, off_t offset,
     memcpy(buf, scan_buf, scan_len < size ? scan_len : size); free(scan_buf);
 
     return scan_len;
-
-    /* MAKE_REQ("read", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /*     cJSON_AddNumberToObject(req, "size", size); */
-    /*     cJSON_AddNumberToObject(req, "offset", offset); */
-
-    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
-    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
-    /* }, { */
-    /*     cJSON *resp_buf_item = cJSON_GetObjectItemCaseSensitive(resp, "buf"); */
-    /*     if (!resp_buf_item) return -EIO; */
-
-    /*     char *resp_buf = cJSON_GetStringValue(resp_buf_item); */
-    /*     if (!resp_buf) return -EIO; */
-    /*     size_t resp_buf_len = strlen(resp_buf); */
-
-    /*     cJSON *base64_encoded_item = cJSON_GetObjectItemCaseSensitive(resp, "base64Encoded"); */
-    /*     if (base64_encoded_item && cJSON_IsTrue(base64_encoded_item)) { */
-    /*         size = base64_decode(resp_buf, resp_buf_len, (unsigned char *) buf); */
-    /*     } else { */
-    /*         size = resp_buf_len < size ? resp_buf_len : size; */
-    /*         memcpy(buf, resp_buf, size); */
-    /*     } */
-    /*     ret = size; */
-    /* }); */
 }
 
 static int
@@ -140,18 +115,6 @@ tabfs_write(const char *path, const char *buf, size_t size, off_t offset,
                  "write", path, buf, size, offset, fi->fh, fi->flags);
 
     int ret; receive_response("{size: %d}", &ret); return ret;
-
-    /* MAKE_REQ("write", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-
-    /*     char base64_buf[size + 1]; // ughh. */
-    /*     base64_encode((const unsigned char *) buf, size, base64_buf); */
-
-    /*     cJSON_AddStringToObject(req, "buf", base64_buf); */
-    /*     cJSON_AddNumberToObject(req, "offset", offset); */
-    /* }, { */
-    /*     ret = size; */
-    /* }); */
 }
 
 static int tabfs_release(const char *path, struct fuse_file_info *fi) {
@@ -159,15 +122,7 @@ static int tabfs_release(const char *path, struct fuse_file_info *fi) {
                  "release", path, fi->fh);
 
     receive_response("{}", NULL);
-
     return 0;
-    
-    /* MAKE_REQ("release", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
-    /* }, { */
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int tabfs_opendir(const char *path, struct fuse_file_info *fi) {
@@ -175,18 +130,7 @@ static int tabfs_opendir(const char *path, struct fuse_file_info *fi) {
                  "opendir", path, fi->flags);
     
     receive_response("{fh: %d}", &fi->fh);
-
     return 0;
-
-    /* MAKE_REQ("opendir", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /*     cJSON_AddNumberToObject(req, "flags", fi->flags); */
-    /* }, { */
-    /*     cJSON *fh_item = cJSON_GetObjectItemCaseSensitive(resp, "fh"); */
-    /*     if (fh_item) fi->fh = fh_item->valueint; */
-
-    /*     ret = 0; */
-    /* }); */
 }
 
 static int
@@ -209,27 +153,26 @@ tabfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     return 0;
 }
 
-static int
-tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
+static int tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
     send_request("{op: %Q, path: %Q, fh: %d}",
                  "releasedir", path, fi->fh);
 
     receive_response("{}", NULL);
-
     return 0;
-    /* MAKE_REQ("releasedir", { */
-    /*     cJSON_AddStringToObject(req, "path", path); */
-    /*     cJSON_AddNumberToObject(req, "fh", fi->fh); */
-    /* }, { */
-    /*     ret = 0; */
-    /* }); */
+}
+
+static int tabfs_truncate(const char *path, off_t size) {
+    send_request("{op: %Q, path: %Q, size: %d}",
+                 "truncate", path, size);
+
+    receive_response("{}", NULL);
+    return 0;
 }
 
 static int tabfs_unlink(const char *path) {
     send_request("{op: %Q, path: %Q}", "unlink", path);
 
     receive_response("{}", NULL);
-
     return 0;
 }
 
@@ -246,6 +189,7 @@ static struct fuse_operations tabfs_filesystem_operations = {
     .readdir  = tabfs_readdir, /* To provide directory listing.      */
     .releasedir = tabfs_releasedir,
 
+    .truncate  = tabfs_truncate,
     .unlink = tabfs_unlink
 };
 
