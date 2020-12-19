@@ -29,32 +29,14 @@ function pathComponent(path, i) {
   return components[i >= 0 ? i : components.length + i];
 }
 function sanitize(s) { return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_'); }
-function utf8(str) {
-  var utf8 = [];
-  for (var i=0; i < str.length; i++) {
-    var charcode = str.charCodeAt(i);
-    if (charcode < 0x80) utf8.push(charcode);
-    else if (charcode < 0x800) {
-      utf8.push(0xc0 | (charcode >> 6), 
-                0x80 | (charcode & 0x3f));
-    }
-    else if (charcode < 0xd800 || charcode >= 0xe000) {
-      utf8.push(0xe0 | (charcode >> 12), 
-                0x80 | ((charcode>>6) & 0x3f), 
-                0x80 | (charcode & 0x3f));
-    }
-    // surrogate pair
-    else {
-      i++;
-      charcode = ((charcode&0x3ff)<<10)|(str.charCodeAt(i)&0x3ff)
-      utf8.push(0xf0 | (charcode >>18), 
-                0x80 | ((charcode>>12) & 0x3f), 
-                0x80 | ((charcode>>6) & 0x3f), 
-                0x80 | (charcode & 0x3f));
-    }
-  }
-  return utf8;
-}
+const stringToUtf8Array = (function() {
+  const encoder = new TextEncoder("utf-8");
+  return str => encoder.encode(str);
+})();
+const utf8ArrayToString = (function() {
+  const decoder = new TextDecoder("utf-8");
+  return utf8 => decoder.decode(utf8);
+})();
 
 const TabManager = {
   tabState: {},
@@ -130,8 +112,8 @@ const Cache = {
   getObjectForHandle(handle) { return this.store[handle]; },
   removeObjectForHandle(handle) { delete this.store[handle]; }
 };
-function toArray(stringOrArray) {
-  if (typeof stringOrArray == 'string') { return utf8(stringOrArray); }
+function toUtf8Array(stringOrArray) {
+  if (typeof stringOrArray == 'string') { return stringToUtf8Array(stringOrArray); }
   else { return stringOrArray; }
 }
 const defineFile = (getData, setData) => ({
@@ -139,29 +121,44 @@ const defineFile = (getData, setData) => ({
     return {
       st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
       st_nlink: 1,
-      st_size: toArray(await getData(path)).length
+      st_size: toUtf8Array(await getData(path)).length
     };
   },
 
-  async open({path}) { return { fh: Cache.storeObject(toArray(await getData(path))) }; },
+  async open({path}) { return { fh: Cache.storeObject(toUtf8Array(await getData(path))) }; },
   async read({path, fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
   },
-  async write({path, buf}) {
+  async write({path, fh, offset, buf}) {
     // FIXME: patch
     // I guess caller should override write() if they want to actually
     // patch and not just re-set the whole string (for example,
     // if they want to hot-reload just one function the user modified)
-    setData(path, buf); return { size: utf8(buf).length };
+    const arr = Cache.getObjectForHandle(fh);
+    const bufarr = stringToUtf8Array(buf);
+    arr.splice(offset, bufarr.length, ...bufarr);
+    await setData(path, utf8ArrayToString(arr)); return { size: bufarr.length };
   },
   async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
 
   async truncate({path, size}) {
     // TODO: weird case if they truncate while the file is open
-    // (but `echo hi > foo.txt` uses O_TRUNC which doesn't do that)
-    setData(path, (await getData(path)).truncate(size)); return {};
+    // (but `echo hi > foo.txt`, the main thing I care about, uses
+    // O_TRUNC which thankfully doesn't do that)
+    const arr = toUtf8Array(await getData(path));
+    arr.splice(size);
+    await setData(path, arr); return {};
   }
 });
+
+router["/tabs/create"] = {
+  async write({path, buf}) {
+    const url = buf.trim();
+    await browser.tabs.create({url});
+    return {size: stringToUtf8Array(buf).length};
+  },
+  async truncate({path, size}) { return {}; }
+}
 
 router["/tabs/by-id"] = {  
   async readdir() {
@@ -277,7 +274,7 @@ router["/tabs/by-id/*/control"] = {
     // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
     // see https://developer.chrome.com/extensions/tabs
     await browser.tabs[command](tabId);
-    return {size: utf8(buf).length};
+    return {size: stringToUtf8Array(buf).length};
   }
 };
 
