@@ -15,10 +15,11 @@ int file_contents_equal(char* path, char* contents) {
 }
 
 // integration tests
-int main() {
+int main(int argc, char** argv) {
     assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
     assert(file_contents_equal("fs/mnt/tabs/last-focused/url", "about:blank"));
     assert(system("file fs/mnt/tabs/last-focused/screenshot.png") == 0);
-    
+    assert(system("echo remove > fs/mnt/tabs/last-focused/control") == 0);
+
     assert(1); printf("Done!\n"); 
 }

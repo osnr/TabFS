@@ -275,7 +275,8 @@ router["/tabs/by-id/*/control"] = {
     // see https://developer.chrome.com/extensions/tabs
     await browser.tabs[command](tabId);
     return {size: stringToUtf8Array(buf).length};
-  }
+  },
+  async truncate({path, size}) { return {}; }
 };
 
 router["/tabs/by-title"] = {
