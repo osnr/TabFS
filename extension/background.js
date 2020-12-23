@@ -83,6 +83,7 @@ function sendDebuggerCommand(tabId, method, commandParams) {
 
 const BrowserState = { lastFocusedWindowId: null, scriptsForTab: {} };
 (function() {
+  if (TESTING) return;
   browser.windows.getLastFocused().then(window => { BrowserState.lastFocusedWindowId = window.id; });
   browser.windows.onFocusChanged.addListener(windowId => {
     if (windowId !== -1) BrowserState.lastFocusedWindowId = windowId;
@@ -90,7 +91,11 @@ const BrowserState = { lastFocusedWindowId: null, scriptsForTab: {} };
 
   chrome.debugger.onEvent.addListener((source, method, params) => {
     console.log(source, method, params);
-    if (method === "Debugger.scriptParsed") {
+    if (method === "Page.") {
+      // we're gonna assume we're always plugged into both Page and Debugger.
+      BrowserState.scriptsForTab[source.tabId] = [];
+
+    } else if (method === "Debugger.scriptParsed") {
       BrowserState.scriptsForTab[source.tabId] = BrowserState.scriptsForTab[source.tabId] || [];
       BrowserState.scriptsForTab[source.tabId].push(params);
       // FIXME: clear these out when page changes in tab (how?)
@@ -251,7 +256,9 @@ router["/tabs/by-id/*/scripts"] = {
 };
 router["/tabs/by-id/*/scripts/*"] = defineFile(async path => {
   const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+  await TabManager.debugTab(tabId);
+  await TabManager.enableDomainForTab(tabId, "Page");
+  await TabManager.enableDomainForTab(tabId, "Debugger");
 
   const parts = path.split("_"); const scriptId = parts[parts.length - 1];
   const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
@@ -313,6 +320,13 @@ router["/tabs/last-focused"] = {
   }
 }
 
+router["/extensions"] = {  
+  async readdir() {
+    const infos = await browser.management.getAll();
+    return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}_${info.id}`)] };
+  }
+};
+
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever.  I also think it would be
 // better to compute this stuff on the fly, so you could patch more
@@ -340,9 +354,9 @@ for (let key in router) {
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), ['url', 'title', 'text', 'control']);
-    assert.deepEqual(await router['/'].readdir(), ['tabs']);
-    assert.deepEqual(await router['/tabs'].readdir(), ['by-id', 'by-title']);
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url', 'title', 'text', 'screenshot.png', 'resources', 'scripts', 'control'] });
+    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'tabs', 'extensions'] });
+    assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'by-id', 'by-title'] });
     
     assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);
   })()

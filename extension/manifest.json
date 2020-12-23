@@ -6,7 +6,7 @@
   "version": "1.0",
 
   "permissions": [
-    "tabs", "tabCapture", "debugger", "nativeMessaging",
+    "tabs", "tabCapture", "debugger", "nativeMessaging", "management",
     "unlimitedStorage",
     "*://*/*"
   ],

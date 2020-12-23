@@ -8,14 +8,14 @@
 #include <assert.h>
 
 int file_contents_equal(char* path, char* contents) {
-    char command[200];
-    snprintf(command, sizeof(command),
-             "[ \"%s\" == \"$(cat %s)\" ]", contents, path);
-    return system(command) == 0;
+    // hehe: https://twitter.com/ianh_/status/1340450349065244675
+    setenv("path", path, 1);
+    setenv("contents", contents, 1);
+    return system("[ \"$contents\" == \"$(cat \"$path\")\" ]") == 0;
 }
 
 // integration tests
-int main(int argc, char** argv) {
+int main() {
     assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
     assert(file_contents_equal("fs/mnt/tabs/last-focused/url", "about:blank"));
     assert(system("file fs/mnt/tabs/last-focused/screenshot.png") == 0);
