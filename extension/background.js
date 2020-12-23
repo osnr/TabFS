@@ -339,15 +339,15 @@ for (let key in router) {
     if (path == '') path = '/';
 
     if (!router[path]) {
-      // find all direct children
-      let children = Object.keys(router)
-                           .filter(k => k.startsWith(path) &&
-                                      (k.match(/\//g) || []).length ===
-                                        (path.match(/\//g) || []).length + 1)
-                           .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
-      children = [".", "..", ...new Set(children)];
+      function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
-      router[path] = { readdir() { return { entries: children }; } };
+      // find all direct children
+      let entries = Object.keys(router)
+                          .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
+                          .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
+      entries = [".", "..", ...new Set(entries)];
+
+      router[path] = { readdir() { return { entries }; } };
     }
   }
 }
@@ -355,8 +355,8 @@ if (TESTING) { // I wish I could color this section with... a pink background, o
   const assert = require('assert');
   (async () => {
     assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url', 'title', 'text', 'screenshot.png', 'resources', 'scripts', 'control'] });
-    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'tabs', 'extensions'] });
-    assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'by-id', 'by-title'] });
+    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'extensions', 'tabs'] });
+    assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     
     assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);
   })()
