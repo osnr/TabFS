@@ -326,6 +326,14 @@ router["/extensions"] = {
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}_${info.id}`)] };
   }
 };
+router["/extensions/*/enabled"] = defineFile(async path => {
+  const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
+  const info = await browser.management.get(extensionId);
+  return String(info.enabled);
+
+}, async (path, buf) => {
+  await browser.management.setEnabled();
+});
 
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever.  I also think it would be

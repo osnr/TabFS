@@ -60,6 +60,14 @@ $ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 $ cat mnt/tabs/by-id/*/text > text.txt
 ```
 
+### TODO: Reload an extension when you edit its source code
+
+Making anohter extension?
+
+SO post.
+
+We can subsume that.
+
 ### TODO: Manage tabs in Emacs dired
 
 I do this
