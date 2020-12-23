@@ -135,13 +135,16 @@ const defineFile = (getData, setData) => ({
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
   },
   async write({path, fh, offset, buf}) {
-    // FIXME: patch
+    let arr = Cache.getObjectForHandle(fh);
+    const bufarr = stringToUtf8Array(buf);
+    if (offset + bufarr.length > arr.length) {
+      const newArr = new Uint8Array(offset + bufarr.length);
+      newArr.set(arr); arr = newArr;
+    }
+    for (let i = 0; i < bufarr.length; i++) { arr[offset + i] = bufarr[i]; }
     // I guess caller should override write() if they want to actually
     // patch and not just re-set the whole string (for example,
     // if they want to hot-reload just one function the user modified)
-    const arr = Cache.getObjectForHandle(fh);
-    const bufarr = stringToUtf8Array(buf);
-    arr.splice(offset, bufarr.length, ...bufarr);
     await setData(path, utf8ArrayToString(arr)); return { size: bufarr.length };
   },
   async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
@@ -150,9 +153,12 @@ const defineFile = (getData, setData) => ({
     // TODO: weird case if they truncate while the file is open
     // (but `echo hi > foo.txt`, the main thing I care about, uses
     // O_TRUNC which thankfully doesn't do that)
-    const arr = toUtf8Array(await getData(path));
-    arr.splice(size);
-    await setData(path, arr); return {};
+    let arr = toUtf8Array(await getData(path));
+    if (size > arr.length) {
+      const newArr = new Uint8Array(size);
+      newArr.set(arr); arr = newArr;
+    }
+    await setData(path, utf8ArrayToString(arr.slice(0, size))); return {};
   }
 });
 
@@ -329,10 +335,12 @@ router["/extensions"] = {
 router["/extensions/*/enabled"] = defineFile(async path => {
   const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
   const info = await browser.management.get(extensionId);
-  return String(info.enabled);
+  return String(info.enabled) + '\n';
 
 }, async (path, buf) => {
-  await browser.management.setEnabled();
+  console.log(buf);
+  const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
+  await browser.management.setEnabled(extensionId, buf.trim() === "true");
 });
 
 // Ensure that there are routes for all ancestors. This algorithm is
