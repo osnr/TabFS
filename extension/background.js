@@ -343,14 +343,21 @@ router["/extensions/*/enabled"] = defineFile(async path => {
   await browser.management.setEnabled(extensionId, buf.trim() === "true");
 });
 
+router["/runtime/reload"] = {
+  async write({path, buf}) {
+    await browser.runtime.reload();
+    return {size: stringToUtf8Array(buf).length};
+  },
+  async truncate({path, size}) { return {}; }
+};
+
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever.  I also think it would be
 // better to compute this stuff on the fly, so you could patch more
 // routes in at runtime, but I need to think a bit about how to make
 // that work with wildcards.
-for (let key in router) {
-  let path = key;
-  while (path !== "/") { // walk upward through the path
+for (let i = 10; i >= 0; i--) {
+  for (let path of Object.keys(router).filter(key => key.split("/").length === i)) {
     path = path.substr(0, path.lastIndexOf("/"));
     if (path == '') path = '/';
 
@@ -371,7 +378,7 @@ if (TESTING) { // I wish I could color this section with... a pink background, o
   const assert = require('assert');
   (async () => {
     assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url', 'title', 'text', 'screenshot.png', 'resources', 'scripts', 'control'] });
-    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'extensions', 'tabs'] });
+    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'extensions', 'tabs', 'runtime'] });
     assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     
     assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);

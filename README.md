@@ -62,7 +62,7 @@ $ cat mnt/tabs/by-id/*/text > text.txt
 
 ### TODO: Reload an extension when you edit its source code
 
-Making anohter extension?
+Making another extension?
 
 SO post.
 
@@ -236,3 +236,4 @@ Screenotate
 
 rmdir a non-empty directory
 
+do you like setting up sockets? I don't
