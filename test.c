@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <unistd.h>
 #include <assert.h>
 #include <wordexp.h>
 
@@ -15,13 +17,17 @@ int file_contents_equal(char* path, char* contents) {
     return system("[ \"$contents\" == \"$(cat \"$path\")\" ]") == 0;
 }
 
-char* expand(char* phrase) {
+char* expand(char* phrase) { // expand path with wildcard
     wordexp_t result; assert(wordexp(phrase, &result, 0) == 0);
     return result.we_wordv[0];
 }
 
 // integration tests
 int main() {
+    // reload the extension so we know it's the latest code.
+    system("echo reload > fs/mnt/runtime/reload"); // this may error, but it should still have effect
+    sleep(2);
+
     assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
     assert(file_contents_equal("fs/mnt/tabs/last-focused/url.txt", "about:blank"));
     assert(system("file fs/mnt/tabs/last-focused/screenshot.png") == 0); // slow

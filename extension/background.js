@@ -8,7 +8,7 @@ const unix = {
   EIO: 5,
   ENXIO: 6,
   ENOTSUP: 45,
-  ETIMEDOUT: 110,
+  ETIMEDOUT: 110, // not on macOS (?)
 
   // Unix file types
   S_IFMT: 0170000, // type of file mask
@@ -82,13 +82,9 @@ function sendDebuggerCommand(tabId, method, commandParams) {
   );
 }
 
-const BrowserState = { lastFocusedWindowId: null, scriptsForTab: {} };
+const BrowserState = { scriptsForTab: {} };
 (function() {
   if (TESTING) return;
-  browser.windows.getLastFocused().then(window => { BrowserState.lastFocusedWindowId = window.id; });
-  browser.windows.onFocusChanged.addListener(windowId => {
-    if (windowId !== -1) BrowserState.lastFocusedWindowId = windowId;
-  });
 
   chrome.debugger.onEvent.addListener((source, method, params) => {
     console.log(source, method, params);
@@ -178,10 +174,9 @@ router["/tabs/by-id"] = {
     return { entries: [".", "..", ...tabs.map(tab => String(tab.id))] };
   }
 };
-// (should these have .txt extensions?)
-// title
-// url
-// text
+// title.txt
+// url.txt
+// text.txt
 // TODO: document.html
 
 // TODO: console
@@ -229,66 +224,13 @@ router["/tabs/by-id"] = {
   // }
 })();
 router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
+  // FIXME: replace with captureTab
+  // FIXME: hide if tab is not focused
   const tabId = parseInt(pathComponent(path, -2));
   await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
   const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
   return Uint8Array.from(atob(data), c => c.charCodeAt(0));
-});
-router["/tabs/by-id/*/resources"] = {
-  async readdir({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-    return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)))] };
-  }
-};
-router["/tabs/by-id/*/resources/*"] = defineFile(async path => {
-  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-
-  const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-  for (let resource of frameTree.resources) {
-    const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
-    if (resourceSuffix === suffix) {
-      let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
-        frameId: frameTree.frame.id,
-        url: resource.url
-      });
-      if (base64Encoded) { return Uint8Array.from(atob(content), c => c.charCodeAt(0)); }
-      return content;
-    }
-  }
-  throw new UnixError(unix.ENOENT);
-});
-router["/tabs/by-id/*/scripts"] = {
-  async opendir({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
-    return { fh: 0 };
-  },
-  async readdir({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    return { entries: [".", "..", ...BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
-  }
-};
-router["/tabs/by-id/*/scripts/*"] = defineFile(async path => {
-  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-  await TabManager.debugTab(tabId);
-  await TabManager.enableDomainForTab(tabId, "Page");
-  await TabManager.enableDomainForTab(tabId, "Debugger");
-
-  const parts = path.split("_"); const scriptId = parts[parts.length - 1];
-  const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
-  return scriptSource;
-
-}, async (path, buf) => {
-  const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
-
-  const parts = path.split("_"); const scriptId = parts[parts.length - 1];
-  await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
-  return {};
 });
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
@@ -302,6 +244,65 @@ router["/tabs/by-id/*/control"] = {
   },
   async truncate({path, size}) { return {}; }
 };
+
+// debugger-API-dependent (Chrome-only)
+(function() {
+  router["/tabs/by-id/*/debugger/resources"] = {
+    async readdir({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
+      const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+      return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)))] };
+    }
+  };
+  router["/tabs/by-id/*/debugger/resources/*"] = defineFile(async path => {
+    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
+
+    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    for (let resource of frameTree.resources) {
+      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+      if (resourceSuffix === suffix) {
+        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+          frameId: frameTree.frame.id,
+          url: resource.url
+        });
+        if (base64Encoded) { return Uint8Array.from(atob(content), c => c.charCodeAt(0)); }
+        return content;
+      }
+    }
+    throw new UnixError(unix.ENOENT);
+  });
+  router["/tabs/by-id/*/debugger/scripts"] = {
+    async opendir({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+      return { fh: 0 };
+    },
+    async readdir({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return { entries: [".", "..", ...BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
+    }
+  };
+  router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
+    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    await TabManager.debugTab(tabId);
+    await TabManager.enableDomainForTab(tabId, "Page");
+    await TabManager.enableDomainForTab(tabId, "Debugger");
+
+    const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+    const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
+    return scriptSource;
+
+  }, async (path, buf) => {
+    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
+
+    const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+    await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
+    return {};
+  });
+})();
 
 router["/tabs/by-title"] = {
   getattr() { 
@@ -332,7 +333,7 @@ router["/tabs/by-title/*"] = {
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
-    const id = (await browser.tabs.query({ active: true, windowId: BrowserState.lastFocusedWindowId }))[0].id;
+    const id = (await browser.tabs.query({ active: true, currentWindow: true }))[0].id;
     return { buf: "by-id/" + id };
   }
 }
@@ -364,10 +365,11 @@ router["/runtime/reload"] = {
 };
 
 // Ensure that there are routes for all ancestors. This algorithm is
-// probably not correct, but whatever.  I also think it would be
-// better to compute this stuff on the fly, so you could patch more
-// routes in at runtime, but I need to think a bit about how to make
-// that work with wildcards.
+// probably not correct, but whatever. Basically, you need to start at
+// the deepest level, fill in all the parents 1 level up that don't
+// exist yet, then walk up one level at a time. It's important to go
+// one level at a time so you know (for each parent) what all the
+// children will be.
 for (let i = 10; i >= 0; i--) {
   for (let path of Object.keys(router).filter(key => key.split("/").length === i)) {
     path = path.substr(0, path.lastIndexOf("/"));
@@ -385,6 +387,9 @@ for (let i = 10; i >= 0; i--) {
       router[path] = { readdir() { return { entries }; } };
     }
   }
+  // I also think it would be better to compute this stuff on the fly,
+  // so you could patch more routes in at runtime, but I need to think
+  // a bit about how to make that work with wildcards.
 }
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');

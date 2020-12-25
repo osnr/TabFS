@@ -1,3 +1,3 @@
 # TabFS
 
-See [https://omar.website/tabfs/].
+See <https://omar.website/tabfs/>.
