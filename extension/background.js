@@ -8,7 +8,7 @@ const unix = {
   EIO: 5,
   ENXIO: 6,
   ENOTSUP: 45,
-  ETIMEDOUT: 110, // not on macOS (?)
+  ETIMEDOUT: 110, // FIXME: not on macOS (?)
 
   // Unix file types
   S_IFMT: 0170000, // type of file mask
@@ -179,6 +179,9 @@ router["/tabs/by-id"] = {
 // text.txt
 // TODO: document.html
 
+// eval-in
+// eval-out
+
 // TODO: mem (?)
 // TODO: cpu (?)
 
@@ -211,19 +214,8 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
-  // router["/tabs/by-id/*/console"] = {
-  //   open() {
-  //     // inject the console
-  //   },
-  //   read() {
-  //     
-  //   },
-  //   write() {
-  //     // what does this even do?
-  //   }
-  // }
 })();
-router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
+router["/tabs/by-id/*/screenshot.png"] = { ...defineFile(async path => {
   // FIXME: replace with captureTab
   // FIXME: hide if tab is not focused
   const tabId = parseInt(pathComponent(path, -2));
@@ -231,7 +223,14 @@ router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
 
   const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
   return Uint8Array.from(atob(data), c => c.charCodeAt(0));
-});
+
+}), async getattr({path}) {
+  return {
+    st_mode: unix.S_IFREG | 0444,
+    st_nlink: 1,
+    st_size: 10000000 // hard-code to 10MB for now
+  };
+} }
 router["/tabs/by-id/*/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
   async write({path, buf}) {
@@ -333,14 +332,41 @@ router["/tabs/by-title/*"] = {
     return {};
   }
 };
-
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
-    const id = (await browser.tabs.query({ active: true, currentWindow: true }))[0].id;
+    const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
     return { buf: "by-id/" + id };
   }
-}
+};
+
+router["/windows"] = {
+  async readdir() {
+    const windows = await browser.windows.getAll();
+    return { entries: [".", "..", ...windows.map(window => String(window.id))] };
+  }
+};
+router["/windows/last-focused"] = {
+  // a symbolic link to /windows/[id for this window]
+  async readlink({path}) {
+    const windowId = (await browser.windows.getLastFocused()).id;
+    return { buf: windowId };
+  }
+};
+router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
+  const windowId = parseInt(pathComponent(path, -2));
+  const dataUrl = await browser.tabs.captureVisibleTab(windowId, {format: 'png'});
+  console.log(dataUrl);
+  return dataUrl;
+
+}), async getattr({path}) {
+  return {
+    st_mode: unix.S_IFREG | 0444,
+    st_nlink: 1,
+    st_size: 10000000 // hard-code to 10MB for now
+  };
+} };
+
 
 router["/extensions"] = {  
   async readdir() {
@@ -365,7 +391,7 @@ router["/runtime/reload"] = {
     await browser.runtime.reload();
     return {size: stringToUtf8Array(buf).length};
   },
-  async truncate({path, size}) { return {}; }
+  truncate() { return {}; }
 };
 
 // Ensure that there are routes for all ancestors. This algorithm is
@@ -398,8 +424,8 @@ for (let i = 10; i >= 0; i--) {
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'screenshot.png', 'resources', 'scripts', 'control'] });
-    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'extensions', 'tabs', 'runtime'] });
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'screenshot.png', 'control', 'debugger'] });
+    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
     assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     
     assert.deepEqual(findRoute('/tabs/by-id/TABID/url.txt'), router['/tabs/by-id/*/url.txt']);
@@ -458,7 +484,6 @@ for (let key in router) {
   }
 }
 
-console.log(router);
 function findRoute(path) {
   let pathSegments = path.split("/");
   

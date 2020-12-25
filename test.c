@@ -24,13 +24,14 @@ char* expand(char* phrase) { // expand path with wildcard
 
 // integration tests
 int main() {
+    system("node extension/background.js"); // run quick local JS tests
+
     // reload the extension so we know it's the latest code.
     system("echo reload > fs/mnt/runtime/reload"); // this may error, but it should still have effect
-    sleep(2);
+    sleep(3);
 
     assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
     assert(file_contents_equal("fs/mnt/tabs/last-focused/url.txt", "about:blank"));
-    assert(system("file fs/mnt/tabs/last-focused/screenshot.png") == 0); // slow
     assert(system("echo remove > fs/mnt/tabs/last-focused/control") == 0);
 
     assert(file_contents_equal(expand("fs/mnt/extensions/TabFS*/enabled"), "true"));
