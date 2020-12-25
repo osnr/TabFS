@@ -242,6 +242,13 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
+router["/tabs/by-id/*/window"] = {
+  // a symbolic link to /windows/[id for this window]
+  async readlink({path}) {
+    const tabId = parseInt(pathComponent(path, -2)); const tab = await browser.tabs.get(tabId);
+    return { buf: "../../../windows/" + tab.windowId };
+  }
+};
 router["/tabs/by-id/*/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
   async write({path, buf}) {
@@ -318,9 +325,9 @@ router["/tabs/by-id/*/control"] = {
 })();
 
 router["/tabs/by-title"] = {
-  getattr() { 
+  getattr() {
     return {
-      st_mode: unix.S_IFDIR | 0777, // writable
+      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
       st_nlink: 3,
       st_size: 0,
     };
@@ -331,8 +338,8 @@ router["/tabs/by-title"] = {
   }
 };
 router["/tabs/by-title/*"] = {
-  // a symbolic link to /tabs/by-id/[id for this tab]
-  async readlink({path}) {
+  // TODO: date
+  async readlink({path}) { // a symbolic link to /tabs/by-id/[id for this tab]
     const parts = path.split("_"); const tabId = parts[parts.length - 1];
     return { buf: "../by-id/" + tabId };
   },
@@ -434,7 +441,7 @@ for (let i = 10; i >= 0; i--) {
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'control', 'debugger'] });
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'window', 'control', 'debugger'] });
     assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
     assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     

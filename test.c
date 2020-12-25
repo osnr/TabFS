@@ -24,7 +24,7 @@ char* expand(char* phrase) { // expand path with wildcard
 
 // integration tests
 int main() {
-    assert(system("node extension/background.js") == 0); // run quick local JS tests
+    assert(system("node extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests
 
     // reload the extension so we know it's the latest code.
     system("echo reload > fs/mnt/runtime/reload"); // this may error, but it should still have effect
