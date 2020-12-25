@@ -179,7 +179,6 @@ router["/tabs/by-id"] = {
 // text.txt
 // TODO: document.html
 
-// TODO: console
 // TODO: mem (?)
 // TODO: cpu (?)
 
@@ -190,8 +189,9 @@ router["/tabs/by-id"] = {
 // TODO: archive.mhtml ?
 // TODO: printed.pdf
 // control
-// resources/
-// TODO: scripts/ TODO: allow creation, eval immediately
+
+// there's a question about whether to do stuff through injected
+// JavaScript or through the devtools API.
 
 (function() {
   const withTab = (readHandler, writeHandler) => defineFile(async path => {
@@ -233,7 +233,7 @@ router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
   return Uint8Array.from(atob(data), c => c.charCodeAt(0));
 });
 router["/tabs/by-id/*/control"] = {
-  // echo remove >> mnt/tabs/by-id/1644/control
+  // echo remove > mnt/tabs/by-id/1644/control
   async write({path, buf}) {
     const tabId = parseInt(pathComponent(path, -2));
     const command = buf.trim();
@@ -245,18 +245,22 @@ router["/tabs/by-id/*/control"] = {
   async truncate({path, size}) { return {}; }
 };
 
-// debugger-API-dependent (Chrome-only)
+// debugger/ : debugger-API-dependent (Chrome-only)
 (function() {
+  // console
+  // resources/
+  // TODO: scripts/ TODO: allow creation, eval immediately
+
   router["/tabs/by-id/*/debugger/resources"] = {
     async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
+      const tabId = parseInt(pathComponent(path, -3));
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
       const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)))] };
     }
   };
   router["/tabs/by-id/*/debugger/resources/*"] = defineFile(async path => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -275,17 +279,17 @@ router["/tabs/by-id/*/control"] = {
   });
   router["/tabs/by-id/*/debugger/scripts"] = {
     async opendir({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
+      const tabId = parseInt(pathComponent(path, -3));
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
       return { fh: 0 };
     },
     async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
+      const tabId = parseInt(pathComponent(path, -3));
       return { entries: [".", "..", ...BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
     }
   };
   router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -295,7 +299,7 @@ router["/tabs/by-id/*/control"] = {
     return scriptSource;
 
   }, async (path, buf) => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
     const parts = path.split("_"); const scriptId = parts[parts.length - 1];
