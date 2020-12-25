@@ -213,20 +213,20 @@ router["/tabs/by-id"] = {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
-  router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
-  router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
-  router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
-  router["/tabs/by-id/*/console"] = {
-    open() {
-      // inject the console
-    },
-    read() {
-      
-    },
-    write() {
-      // what does this even do?
-    }
-  }
+  router["/tabs/by-id/*/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
+  router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
+  router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
+  // router["/tabs/by-id/*/console"] = {
+  //   open() {
+  //     // inject the console
+  //   },
+  //   read() {
+  //     
+  //   },
+  //   write() {
+  //     // what does this even do?
+  //   }
+  // }
 })();
 router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
   const tabId = parseInt(pathComponent(path, -2));
@@ -389,11 +389,11 @@ for (let i = 10; i >= 0; i--) {
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url', 'title', 'text', 'screenshot.png', 'resources', 'scripts', 'control'] });
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'screenshot.png', 'resources', 'scripts', 'control'] });
     assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'extensions', 'tabs', 'runtime'] });
     assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     
-    assert.deepEqual(findRoute('/tabs/by-id/TABID/url'), router['/tabs/by-id/*/url']);
+    assert.deepEqual(findRoute('/tabs/by-id/TABID/url.txt'), router['/tabs/by-id/*/url.txt']);
   })()
 }
 
