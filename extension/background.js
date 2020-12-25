@@ -8,6 +8,7 @@ const unix = {
   EIO: 5,
   ENXIO: 6,
   ENOTSUP: 45,
+  ETIMEDOUT: 110,
 
   // Unix file types
   S_IFMT: 0170000, // type of file mask
@@ -215,6 +216,17 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/url"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
   router["/tabs/by-id/*/title"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text"] = fromScript(`document.body.innerText`);
+  router["/tabs/by-id/*/console"] = {
+    open() {
+      // inject the console
+    },
+    read() {
+      
+    },
+    write() {
+      // what does this even do?
+    }
+  }
 })();
 router["/tabs/by-id/*/screenshot.png"] = defineFile(async path => {
   const tabId = parseInt(pathComponent(path, -2));
@@ -278,7 +290,6 @@ router["/tabs/by-id/*/scripts/*"] = defineFile(async path => {
   await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
   return {};
 });
-
 router["/tabs/by-id/*/control"] = {
   // echo remove >> mnt/tabs/by-id/1644/control
   async write({path, buf}) {
@@ -295,7 +306,7 @@ router["/tabs/by-id/*/control"] = {
 router["/tabs/by-title"] = {
   getattr() { 
     return {
-      st_mode: unix.S_IFDIR | 0777,
+      st_mode: unix.S_IFDIR | 0777, // writable
       st_nlink: 3,
       st_size: 0,
     };
@@ -311,7 +322,7 @@ router["/tabs/by-title/*"] = {
     const parts = path.split("_"); const tabId = parts[parts.length - 1];
     return { buf: "../by-id/" + tabId };
   },
-  async unlink({path}) {
+  async unlink({path}) { // you can delete a by-title/TAB to close that tab
     const parts = path.split("_"); const tabId = parseInt(parts[parts.length - 1]);
     await browser.tabs.remove(tabId);
     return {};
@@ -332,16 +343,17 @@ router["/extensions"] = {
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}_${info.id}`)] };
   }
 };
-router["/extensions/*/enabled"] = defineFile(async path => {
+router["/extensions/*/enabled"] = { ...defineFile(async path => {
   const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
   const info = await browser.management.get(extensionId);
   return String(info.enabled) + '\n';
 
 }, async (path, buf) => {
-  console.log(buf);
   const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
   await browser.management.setEnabled(extensionId, buf.trim() === "true");
-});
+
+  // suppress truncate so it doesn't accidentally flip the state when you do, e.g., `echo true >`
+}), truncate() { return {}; } };
 
 router["/runtime/reload"] = {
   async write({path, buf}) {
@@ -466,6 +478,13 @@ async function onMessage(req) {
   console.log('req', req);
 
   let response = { op: req.op, error: unix.EIO };
+  let didTimeout = false, timeout = setTimeout(() => {
+    // timeout is very useful because some operations just hang
+    // (like trying to take a screenshot, until the tab is focused)
+    didTimeout = true; console.error('timeout');
+    port.postMessage({ op: req.op, error: unix.ETIMEDOUT });
+  }, 1000);
+
   /* console.time(req.op + ':' + req.path);*/
   try {
     response = await findRoute(req.path)[req.op](req);
@@ -481,8 +500,12 @@ async function onMessage(req) {
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
-  console.log('resp', response);
-  port.postMessage(response);
+  if (!didTimeout) {
+    clearTimeout(timeout);
+
+    console.log('resp', response);
+    port.postMessage(response);
+  }
 };
 
 function tryConnect() {
