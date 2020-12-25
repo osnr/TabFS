@@ -8,7 +8,7 @@
   "permissions": [
     "tabs", "tabCapture", "debugger", "nativeMessaging", "management",
     "unlimitedStorage",
-    "*://*/*"
+    "<all_urls>"
   ],
 
   "background": {

@@ -215,22 +215,6 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
-router["/tabs/by-id/*/screenshot.png"] = { ...defineFile(async path => {
-  // FIXME: replace with captureTab
-  // FIXME: hide if tab is not focused
-  const tabId = parseInt(pathComponent(path, -2));
-  await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-
-  const {data} = await sendDebuggerCommand(tabId, "Page.captureScreenshot");
-  return Uint8Array.from(atob(data), c => c.charCodeAt(0));
-
-}), async getattr({path}) {
-  return {
-    st_mode: unix.S_IFREG | 0444,
-    st_nlink: 1,
-    st_size: 10000000 // hard-code to 10MB for now
-  };
-} }
 router["/tabs/by-id/*/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
   async write({path, buf}) {
@@ -356,8 +340,8 @@ router["/windows/last-focused"] = {
 router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
   const windowId = parseInt(pathComponent(path, -2));
   const dataUrl = await browser.tabs.captureVisibleTab(windowId, {format: 'png'});
-  console.log(dataUrl);
-  return dataUrl;
+  return Uint8Array.from(atob(dataUrl.substr(("data:image/png;base64,").length)),
+                         c => c.charCodeAt(0));
 
 }), async getattr({path}) {
   return {
@@ -424,7 +408,7 @@ for (let i = 10; i >= 0; i--) {
 if (TESTING) { // I wish I could color this section with... a pink background, or something.
   const assert = require('assert');
   (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'screenshot.png', 'control', 'debugger'] });
+    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'control', 'debugger'] });
     assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
     assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
     
