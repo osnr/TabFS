@@ -39,30 +39,39 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
+
+async function attachDebugger(tabId) {
+  return new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
+    if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
+    else { resolve(); }
+  }));
+}
+async function detachDebugger(tabId) {
+  return new Promise((resolve, reject) => chrome.debugger.detach({tabId}, () => {
+    if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
+    else { resolve(); }
+  }));
+}
 const TabManager = {
   tabState: {},
 
+  // higher-level wrapper which avoids unnecessary attaches (do we need this?)
   debugTab: async function(tabId) {
     this.tabState[tabId] = this.tabState[tabId] || {};
     if (this.tabState[tabId].debugging) {
       this.tabState[tabId].debugging += 1;
 
     } else {
-      await new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", async () => {
-        if (chrome.runtime.lastError) {
-          if (chrome.runtime.lastError.message.indexOf('Another debugger is already attached') !== -1) {
-            chrome.debugger.detach({tabId}, async () => {
-              await TabManager.debugTab(tabId);
-              resolve();
-            });
-          } else {
-            reject(chrome.runtime.lastError); return;
-          }
-          return;
+      try { await attachDebugger(tabId); }
+      catch (e) {
+        if (e.message.indexOf('Another debugger is already attached') !== -1) {
+          await detachDebugger(tabId);
+          await attachDebugger(tabId);
         }
-        this.tabState[tabId].debugging = 1; resolve();
-      }));
+      }
+      this.tabState[tabId].debugging = 1;
     }
+    // FIXME: unsubscribe
   },
   enableDomainForTab: async function(tabId, domain) {
     this.tabState[tabId] = this.tabState[tabId] || {};
@@ -73,7 +82,6 @@ const TabManager = {
     }
   }
 };
-
 function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
     chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
@@ -103,8 +111,11 @@ const BrowserState = { scriptsForTab: {} };
 const router = {};
 
 const Cache = {
-  // used when you open a file to cache the content we got from the browser
-  // until you close that file.
+  // used when you open a file to cache the content we got from the
+  // browser until you close that file. (so we can respond to
+  // individual chunk read() and write() requests without doing a
+  // whole new conversation with the browser and regenerating the
+  // content -- important for taking a screenshot, for instance)
   store: {}, nextHandle: 0,
   storeObject(object) {
     const handle = ++this.nextHandle;
@@ -119,14 +130,30 @@ function toUtf8Array(stringOrArray) {
   else { return stringOrArray; }
 }
 const defineFile = (getData, setData) => ({
+  // Generates a full set of file operations (so clients can read and
+  // write sections of the file, stat it to get its size and see it
+  // show up in ls, etc), given getData and setData functions that
+  // define the contents of the entire file.
+
+  // getData: (path: String) -> Promise<contentsOfFile: String|Uint8Array>
+  // setData [optional]: (path: String, newContentsOfFile: String) -> Promise<>
+
+  // You can override file operations (like `truncate` or `getattr`)
+  // in the returned set if you want different behavior from what's
+  // defined here.
+
   async getattr({path}) {
     return {
       st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
       st_nlink: 1,
+      // you'll want to override this if getData() is slow, because
+      // getattr() gets called a lot more cavalierly than open().
       st_size: toUtf8Array(await getData(path)).length
     };
   },
 
+  // We call getData() once when the file is opened, then cache that
+  // data for all subsequent reads from that application.
   async open({path}) { return { fh: Cache.storeObject(toUtf8Array(await getData(path))) }; },
   async read({path, fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
@@ -287,7 +314,6 @@ router["/tabs/by-id/*/control"] = {
 
     const parts = path.split("_"); const scriptId = parts[parts.length - 1];
     await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
-    return {};
   });
 })();
 

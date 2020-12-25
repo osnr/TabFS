@@ -28,9 +28,12 @@ int main() {
 
     // reload the extension so we know it's the latest code.
     system("echo reload > fs/mnt/runtime/reload"); // this may error, but it should still have effect
+    // FIXME: race here
     sleep(4);
 
+    // FIXME: synthesize some kind of web page
     assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
+    // FIXME: race here
     assert(file_contents_equal("fs/mnt/tabs/last-focused/url.txt", "about:blank"));
     assert(system("echo remove > fs/mnt/tabs/last-focused/control") == 0);
 
