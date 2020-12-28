@@ -11,8 +11,8 @@
 #include <pthread.h>
 #include <fuse.h>
 
-#include "frozen/frozen.h"
-#include "frozen/frozen.c"
+#include "vendor/frozen.h"
+#include "vendor/frozen.c"
 
 FILE* l;
 

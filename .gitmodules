@@ -1,3 +1,0 @@
-[submodule "fs/frozen"]
-	path = fs/frozen
-	url = https://github.com/cesanta/frozen.git

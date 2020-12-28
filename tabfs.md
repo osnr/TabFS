@@ -23,8 +23,8 @@ Firefox, on macOS and Linux.[^otherbrowsers]
 
 [^otherbrowsers]: It could probably be made to work on other browsers
     like Safari and Opera that support the WebExtensions API, and on
-    Windows using Dokan or WinFUSE/WSL stuff, but I haven't looked
-    into that. 
+    Windows using Dokan or WinFUSE/WSL stuff (?), but I haven't looked
+    into that.
 
 Each of your open tabs is mapped to a folder.
 
@@ -132,9 +132,9 @@ yet another extension, or you need to tack weird permissions onto your
 work-in-progress extension, and you don't just get a command you can
 trigger from your editor or shell.
 
-TabFS lets you subsume all this into [an ordinary shell
-script](https://github.com/osnr/playgroundize-devtools-protocol/blob/main/go.sh),
-with no need for any further browser-side code.
+TabFS lets you do all this in [an ordinary shell
+script](https://github.com/osnr/playgroundize-devtools-protocol/blob/main/go.sh).
+You don't have to write any browser-side code at all.
 
 The script linked above turns the extension (this one's title is
 "Playgroundize DevTools Protocol") off, then turns it back on, then
@@ -155,7 +155,6 @@ every time I want to reload my extension code!
 I do this in Emacs dired.
 
 ### TODO: Live edit a running Web page
-
 
 (TODO: it would be cool to have a persistent storage story here)
 
@@ -217,10 +216,7 @@ Choose manifest.json in the extension subfolder of this repo.
 
 ### 2. Install the C filesystem
 
-First, make sure you `git submodule update --init` to get the
-`fs/frozen` dependency.
-
-And make sure you have FUSE and FUSE headers. On Linux, for example,
+First, make sure you have FUSE and FUSE headers. On Linux, for example,
 `sudo apt install libfuse-dev` or equivalent. On macOS, get [FUSE for
 macOS](https://osxfuse.github.io/).
 
@@ -405,12 +401,16 @@ files
   my tabs, to help me develop other things in the browser so I'd have
   actions I could trigger from my editor, ...
 
-- SQLite. OSQuery
+- stuff that looks cool:
+
+    - SQLite. OSQuery
+
+    - <https://luciopaiva.com/witchcraft/> it has the right idea
 
 - fake filesystems talk
 
 - [rmdir a non-empty
-  directory](https://twitter.com/rsnous/status/1107427906832089088) I
+  directory](https://twitter.com/rsnous/status/1107427906832089088). I
   feel like a new OS, something like Plan 9, should
   [generalize](https://twitter.com/rsnous/status/1070830656005988352)
   its file I/O APIs just enough to avoid problems like this. like
@@ -418,5 +418,3 @@ files
   of synthetic filesystems, very slow remote filesystems, etc
 
 do you like setting up sockets? I don't
-
-https://luciopaiva.com/witchcraft/
