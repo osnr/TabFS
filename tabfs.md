@@ -4,7 +4,7 @@ title: TabFS
 <!-- I'm setting this page in Verdana-on-gray so I feel more comfortable -->
 <!-- jotting random notes and stuff down. -->
 <style>
-body { font-family: Verdana; background: #eee; }
+body { font-family: Verdana, sans-serif; background: #eee; }
 h1 { font-family: Helvetica; }
 </style>
 
@@ -29,14 +29,22 @@ Firefox, on macOS and Linux.[^otherbrowsers]
 Each of your open tabs is mapped to a folder.
 
 <div class="figure">
-<img src="doc/finder.png">
+<img src="doc/00-browser.png" style="width: 70%">
+<img src="doc/00-finder.png" style="width: 80%; max-height: 1000px">
+<p class="caption" style="margin-top: -20px">I have 3 tabs open, and
+they map to 3 folders in TabFS</p>
 </div>
 
 The files inside a tab's folder directly reflect (and can control) the
 state of that tab in your browser. (TODO: update as I add more)
 
 <div class="figure">
-<img src="doc/finder-contents.png">
+<video autoplay loop muted>
+  <source src="doc/finder-contents.mp4" type="video/mp4">
+</video>
+<p class="caption">Example: the url.txt, text.txt, and title.txt
+files inside a tab's folder, which tell me those live properties
+for that tab</p>
 </div>
 
 This gives you a _ton_ of power, because now you can apply [all the
@@ -54,12 +62,16 @@ file](https://twitter.com/rsnous/status/1308588645872435202) that you
 can run whenever, and it's no different from scripting any other part
 of your computer.
 
-## Examples of stuff you can do!
+## Examples of stuff you can do![^examples]
+
+[^examples]: maybe some of these feel a little more vital and
+    fleshed-out and urgent than others. the things I actually wanted
+    to do and reached for vs. the things that satisfy some pedagogical
+    property (simple to explain, stack on top of the previous example,
+    ...)
 
 (assuming your current directory is the `fs` subdirectory of the git
 repo and you have the extension running)
-
-(TODO: more of these)
 
 ### List the titles of all the tabs you have open 
 
@@ -73,6 +85,18 @@ Web Store Hosting and Updating - Google Chrome
 Home / Twitter
 ...
 ```
+
+### Cull tabs like any other files 
+
+<div class="figure">
+<video autoplay loop muted>
+  <source src="doc/delete.mp4" type="video/mp4">
+</video>
+<p class="caption">Selecting and deleting a bunch of tabs in my file manager</p>
+</div>
+
+I'm using Dired in Emacs here, but you could use whatever tools you
+already feel comfortable managing your files with.
 
 ### Close all Stack Overflow tabs
 
@@ -130,15 +154,16 @@ post](https://stackoverflow.com/questions/2963260/how-do-i-auto-reload-a-chrome-
 with ways to automate this, but they're all sort of hacky. You need
 yet another extension, or you need to tack weird permissions onto your
 work-in-progress extension, and you don't just get a command you can
-trigger from your editor or shell.
+trigger from your editor or shell to refresh the extension.
 
 TabFS lets you do all this in [an ordinary shell
 script](https://github.com/osnr/playgroundize-devtools-protocol/blob/main/go.sh).
 You don't have to write any browser-side code at all.
 
-The script linked above turns the extension (this one's title is
-"Playgroundize DevTools Protocol") off, then turns it back on, then
-reloads any Chrome DevTools pages that are open:
+This script turns an extension (this one's title is "Playgroundize
+DevTools Protocol") off, then turns it back on, then reloads any tabs
+that have the relevant pages open (in this case, I decided it's tabs
+whose titles start with "Chrome Dev"):
 
 ```
 #!/bin/bash -eux
@@ -147,12 +172,8 @@ echo true > mnt/extensions/Playg*/enabled
 echo reload | tee mnt/tabs/by-title/Chrome_Dev*/control
 ```
 
-I mapped this script to Ctrl-. in my Emacs, so now I can just hit that
-every time I want to reload my extension code!
-
-### TODO: Cull tabs like any other files 
-
-I do this in Emacs dired.
+I mapped this script to Ctrl-. in my text editor, and now I just hit
+that every time I want to reload my extension code.
 
 ### TODO: Live edit a running Web page
 
@@ -263,10 +284,13 @@ click "Inspect")
 </div>
 
 This console is also incredibly helpful for debugging anything that
-goes wrong, which probably will happen.
+goes wrong, which probably will happen. (If you get a generic I/O
+error at the shell when running a command on TabFS, that probably
+means that an exception happened which you can check here.)
 
-(My OS and applications are pretty chatty! They do a lot of
-operations, even when I don't feel like I'm actually doing anything.)
+(My OS and applications are pretty chatty. They do a lot of
+operations, even when I don't feel like I'm actually doing
+anything. My sense is that macOS is generally chattier than Linux.)
 
 ## Design
 
@@ -280,10 +304,17 @@ operations, even when I don't feel like I'm actually doing anything.)
     **The most interesting file**. Defines all the synthetic files and
     what browser operations they invoke behind the scenes.[^frustrates]
 
-[^frustrates]: it frustrates me that I can't have something like a
-    table of contents for this source file. because it does have a
-    structure to it! so I feel like the UI for looking at the file
-    should highlight and exploit that structure.
+[^frustrates]: it frustrates me that I can't show you, like, a table
+    of contents for this source file. because it does have a structure
+    to it! so I feel like the UI for looking at this one file should
+    be
+    [custom-tailored](https://twitter.com/rsnous/status/1262956983222591488)
+    to
+    [highlight](https://twitter.com/rsnous/status/1262957486262214657)
+    and exploit that structure. (I wonder what other cases like this
+    are out there, where ad hoc UI for one file would be useful. like
+    if you have tangled-but-regular business logic, or the giant
+    opcode switch statement of an emulator or interpreter.)
     
     I want to link you to a particular route and talk about it here
     and also have some kind of
@@ -327,14 +358,14 @@ TODO: make diagrams?
 
 GPLv3
 
-## things that would be good to do
+## things that would be cool to do
 
-- multithreading. the key constraint is that I give `-s` to
+- multithreading. the key constraint is that I pass `-s` to
   `fuse_main` in `tabfs.c`, which makes everything
   single-threaded. but I'm not clear on how much it would improve
   performance? maybe a lot, but not sure. maybe workload-dependent?
 
-    the extension itself (and the standard I/O comm between the fs and
+    the extension itself (and the stdin/stdout comm between the fs and
   the extension) would still be single-threaded, but you could
   interleave requests since most of that stuff is async. like the
   screenshot request that takes like half a second, you could do other
@@ -344,14 +375,18 @@ GPLv3
   individual request hangs anyway; they're not expecting the
   filesystem to be so slow (and to be fair to them, they really have
   [no way](https://twitter.com/whitequark/status/1133905587819941888)
-  to). some of these are problems that may be inevitable for any FUSE
+  to). some of these problems may be inevitable for any FUSE
   filesystem, even ones you'd assume are reasonably battle-tested and
   well-engineered like sshfs?
 
 - look into support for Firefox / Windows / Safari / etc. best FUSE
   equiv for Windows? can you bridge to the remote debugging APIs that
-  all of them have to get the augmented functionality? or just
+  all of them already have to get the augmented functionality? or just
   implement it all with JS monkey patching?
+
+- window management. tab management where you can move tabs
+
+- snapshotting (snapshot.html / snapshot.mhtml file)
 
 - fix leaks
 
@@ -376,9 +411,10 @@ inside of the browser. can we have 'browser tabs as files'?
 
 - there are two 'operating systems' on my computer, the browser and
 Unix, and Unix is by far the more accessible and programmable and
-cohesive as a computing environment (shells, processes), even though
-it's arguably the less important to my daily life. how can the browser
-take on these properties?
+cohesive as a computing environment (it has concepts that compose!
+shell, processes, files), even though it's arguably the less important
+to my daily life. how can the browser take on more of the properties
+of Unix?
 
 - it's [way too
 hard](https://twitter.com/rsnous/status/1342236988938719232) to make a
@@ -386,6 +422,14 @@ browser extension. even 'make an extension' is a bad framing; it
 suggests making an extension is a whole Thing, a whole Project. like,
 why can't I just take a minute to ask my browser a question or tell it
 to automate something? lightness
+
+- a lot of existing uses of these APIs are in an automation context,
+  if you want to test your code on an automated browser. I'm much more
+  interested in an interactive, end-user context. augmenting the way I
+  use my normal browser. that's why this is an extension. it doesn't
+  require your browser to run in some weird remote debugging mode that
+  you'd always forget to turn on. it just [stays
+  running](https://twitter.com/rsnous/status/1340150818553561094)
 
 - open input space -- filesystem. (it reminds me of Screenotate.)
 
@@ -410,11 +454,13 @@ files
 - fake filesystems talk
 
 - [rmdir a non-empty
-  directory](https://twitter.com/rsnous/status/1107427906832089088). I
-  feel like a new OS, something like Plan 9, should
+  directory](https://twitter.com/rsnous/status/1107427906832089088)
+  -- when I was thinking if you should be able to `rm by-id/TABID`
+  even though `TABID` is a folder. I feel like a new OS, something
+  like Plan 9, should
   [generalize](https://twitter.com/rsnous/status/1070830656005988352)
   its file I/O APIs just enough to avoid problems like this. like
-  design them with the disk in mind but also a few concrete cases
-  of synthetic filesystems, very slow remote filesystems, etc
+  design them with the disk in mind but also a few concrete cases of
+  synthetic filesystems, very slow remote filesystems, etc
 
 do you like setting up sockets? I don't

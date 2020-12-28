@@ -53,35 +53,21 @@ async function detachDebugger(tabId) {
   }));
 }
 const TabManager = {
-  tabState: {},
-
-  // higher-level wrapper which avoids unnecessary attaches and tries
-  // to keep debugger attached in a reasonable state whenever you call
-  // it (do we need this?)
   debugTab: async function(tabId) {
-    this.tabState[tabId] = this.tabState[tabId] || {};
-    if (this.tabState[tabId].debugging) {
-      this.tabState[tabId].debugging += 1;
-
-    } else {
-      try { await attachDebugger(tabId); }
-      catch (e) {
-        if (e.message.indexOf('Another debugger is already attached') !== -1) {
-          await detachDebugger(tabId);
-          await attachDebugger(tabId);
-        }
+    // meant to be higher-level wrapper for raw attach/detach
+    // TODO: could we remember if we're already attached? idk if it's worth it
+    try { await attachDebugger(tabId); }
+    catch (e) {
+      if (e.message.indexOf('Another debugger is already attached') !== -1) {
+        await detachDebugger(tabId);
+        await attachDebugger(tabId);
       }
-      this.tabState[tabId].debugging = 1;
     }
-    // FIXME: unsubscribe
+    // TODO: detach automatically? some kind of reference counting thing?
   },
   enableDomainForTab: async function(tabId, domain) {
-    this.tabState[tabId] = this.tabState[tabId] || {};
-    if (this.tabState[tabId][domain]) { this.tabState[tabId][domain] += 1;
-    } else {
-      await sendDebuggerCommand(tabId, `${domain}.enable`, {});
-      this.tabState[tabId][domain] = 1;
-    }
+    // TODO: could we remember if we're already enabled? idk if it's worth it
+    await sendDebuggerCommand(tabId, `${domain}.enable`, {});
   }
 };
 function sendDebuggerCommand(tabId, method, commandParams) {
@@ -217,7 +203,6 @@ router["/tabs/by-id"] = {
 // TODO: dom/ ?
 // TODO: globals/ ?
 
-// screenshot.png (FIXME: how to keep from blocking when unfocused?)
 // TODO: archive.mhtml ?
 // TODO: printed.pdf
 // control
@@ -373,6 +358,9 @@ router["/windows/last-focused"] = {
   }
 };
 router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
+  // this is a window thing (rn, the _only_ window thing) because you
+  // can only capture the visible tab for each window anyway; you
+  // can't take a screenshot of just any arbitrary tab
   const windowId = parseInt(pathComponent(path, -2));
   const dataUrl = await browser.tabs.captureVisibleTab(windowId, {format: 'png'});
   return Uint8Array.from(atob(dataUrl.substr(("data:image/png;base64,").length)),
