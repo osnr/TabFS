@@ -55,7 +55,9 @@ async function detachDebugger(tabId) {
 const TabManager = {
   tabState: {},
 
-  // higher-level wrapper which avoids unnecessary attaches (do we need this?)
+  // higher-level wrapper which avoids unnecessary attaches and tries
+  // to keep debugger attached in a reasonable state whenever you call
+  // it (do we need this?)
   debugTab: async function(tabId) {
     this.tabState[tabId] = this.tabState[tabId] || {};
     if (this.tabState[tabId].debugging) {
