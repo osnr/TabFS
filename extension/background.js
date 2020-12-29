@@ -84,14 +84,13 @@ const BrowserState = { scriptsForTab: {} };
 
   chrome.debugger.onEvent.addListener((source, method, params) => {
     console.log(source, method, params);
-    if (method === "Page.") {
+    if (method === "Page.frameStartedLoading") {
       // we're gonna assume we're always plugged into both Page and Debugger.
       BrowserState.scriptsForTab[source.tabId] = [];
 
     } else if (method === "Debugger.scriptParsed") {
       BrowserState.scriptsForTab[source.tabId] = BrowserState.scriptsForTab[source.tabId] || [];
       BrowserState.scriptsForTab[source.tabId].push(params);
-      // FIXME: clear these out when page changes in tab (how?)
     }
   });
 })();

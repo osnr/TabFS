@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include <unistd.h>
 #include <assert.h>
@@ -24,20 +25,20 @@ char* expand(char* phrase) { // expand path with wildcard
 
 // integration tests
 int main() {
-    assert(system("node extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests
+    assert(system("node ../extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests
 
     // reload the extension so we know it's the latest code.
-    system("echo reload > fs/mnt/runtime/reload"); // this may error, but it should still have effect
-    // FIXME: race here
-    sleep(4);
+    system("echo reload > ../fs/mnt/runtime/reload 2>/dev/null"); // this may error, but it should still have effect
+    // spin until the extension reloads.
+    struct stat st; while (stat("../fs/mnt/tabs", &st) != 0) {}
+
+    assert(file_contents_equal(expand("../fs/mnt/extensions/TabFS*/enabled"), "true"));
 
     // FIXME: synthesize some kind of web page
-    assert(system("echo about:blank > fs/mnt/tabs/create") == 0);
+    assert(system("echo about:blank > ../fs/mnt/tabs/create") == 0);
     // FIXME: race here
-    assert(file_contents_equal("fs/mnt/tabs/last-focused/url.txt", "about:blank"));
-    assert(system("echo remove > fs/mnt/tabs/last-focused/control") == 0);
-
-    assert(file_contents_equal(expand("fs/mnt/extensions/TabFS*/enabled"), "true"));
+    assert(file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank"));
+    assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
 
     assert(1); printf("Done!\n"); 
 }
