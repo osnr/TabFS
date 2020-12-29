@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <string.h>
 
 #include <unistd.h>
 #include <assert.h>
@@ -43,6 +45,14 @@ int main() {
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/text.txt", "Body Text of Test Page"));
 
         assert(system("ls ../fs/mnt/tabs/last-focused/debugger/scripts") == 0);
+
+        {
+            DIR* scripts = opendir("../fs/mnt/tabs/last-focused/debugger/scripts");
+            assert(strcmp(readdir(scripts)->d_name, ".") == 0);
+            assert(strcmp(readdir(scripts)->d_name, "..") == 0);
+            assert(strcmp(readdir(scripts)->d_name, "7_file____Users_osnr_Code_tabfs_test_test-script.js") == 0);
+            closedir(scripts);
+        }
 
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }

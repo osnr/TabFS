@@ -58,11 +58,11 @@ const TabManager = (function() {
     console.log(source, method, params);
     if (method === "Page.frameStartedLoading") {
       // we're gonna assume we're always plugged into both Page and Debugger.
-      TabManager.scriptsForTab[source.tabId] = [];
+      TabManager.scriptsForTab[source.tabId] = {};
 
     } else if (method === "Debugger.scriptParsed") {
-      TabManager.scriptsForTab[source.tabId] = TabManager.scriptsForTab[source.tabId] || [];
-      TabManager.scriptsForTab[source.tabId].push(params);
+      TabManager.scriptsForTab[source.tabId] = TabManager.scriptsForTab[source.tabId] || {};
+      TabManager.scriptsForTab[source.tabId][params.scriptId] = params;
     }
   });
 
@@ -82,7 +82,7 @@ const TabManager = (function() {
     },
     enableDomainForTab: async function(tabId, domain) {
       // TODO: could we remember if we're already enabled? idk if it's worth it
-      if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = []; }
+      if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = {}; }
       await sendDebuggerCommand(tabId, `${domain}.enable`, {});
     }
   };
@@ -288,18 +288,24 @@ router["/tabs/by-id/*/control"] = {
     },
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -3));
-      return { entries: [".", "..", ...TabManager.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
+      // it's useful to put the ID first so:
+      // 1. the .js extension stays on the end
+      // 2. file prefixes like Emacs temp files, Emacs looking for file with SCCS s. prefix, etc all are clearly invalid automatically
+      const scriptFileNames = Object.values(TabManager.scriptsForTab[tabId])
+            .map(params => params.scriptId + "_" + sanitize(params.url).slice(0, 200));
+      return { entries: [".", "..", ...scriptFileNames] };
     }
   };
   router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId);
-    console.log('BEFORE', TabManager.scriptsForTab[tabId].length);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
-    console.log('AFTER', TabManager.scriptsForTab[tabId].length)
 
-    const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+    const parts = pathComponent(path, -1).split("_"); const scriptId = parts[0];
+    // TODO: check the script title in path vs the actual script title
+    if (!TabManager.scriptsForTab[tabId][scriptId]) { throw new UnixError(unix.ENOENT); }
+
     const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
     return scriptSource;
 
@@ -307,7 +313,10 @@ router["/tabs/by-id/*/control"] = {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const parts = path.split("_"); const scriptId = parts[parts.length - 1];
+    const parts = path.split("_"); const scriptId = parts[0];
+    // TODO: check the script title in path vs the actual script title
+    if (!TabManager.scriptsForTab[tabId][scriptId]) { throw new UnixError(unix.ENOENT); }
+
     await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
   });
 })();
