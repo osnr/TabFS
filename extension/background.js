@@ -296,16 +296,21 @@ router["/tabs/by-id/*/control"] = {
       return { entries: [".", "..", ...scriptFileNames] };
     }
   };
+  function pathScriptInfo(tabId, path) {
+    const [scriptId, ...rest] = pathComponent(path, -1).split("_");
+    const scriptInfo = TabManager.scriptsForTab[tabId][scriptId];
+    if (!scriptInfo || sanitize(scriptInfo.url).slice(0, 200) !== rest.join("_")) {
+      throw new UnixError(unix.ENOENT);
+    }
+    return scriptInfo;
+  }
   router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const parts = pathComponent(path, -1).split("_"); const scriptId = parts[0];
-    // TODO: check the script title in path vs the actual script title
-    if (!TabManager.scriptsForTab[tabId][scriptId]) { throw new UnixError(unix.ENOENT); }
-
+    const {scriptId} = pathScriptInfo(tabId, path);
     const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
     return scriptSource;
 
@@ -313,10 +318,7 @@ router["/tabs/by-id/*/control"] = {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const parts = path.split("_"); const scriptId = parts[0];
-    // TODO: check the script title in path vs the actual script title
-    if (!TabManager.scriptsForTab[tabId][scriptId]) { throw new UnixError(unix.ENOENT); }
-
+    const {scriptId} = pathScriptInfo(tabId, path);
     await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
   });
 })();

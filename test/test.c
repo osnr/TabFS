@@ -67,6 +67,7 @@ int main() {
             assert(matches_regex(readdir(scripts)->d_name, "test\\-script.js$"));
             closedir(scripts);
         }
+        assert(system("cat ../fs/mnt/tabs/last-focused/debugger/scripts/*test-script.js") == 0);
 
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
