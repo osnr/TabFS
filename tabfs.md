@@ -358,7 +358,18 @@ TODO: make diagrams?
 
 GPLv3
 
-## things that would be cool to do
+## things that could/should be done
+
+- add more synthetic files!! view DOM nodes, snapshot current HTML of
+  page, spelunk into living objects. see what your code is doing. make
+  more files writable also
+
+- build more (GUI and CLI) tools on top, on both sides
+
+- more persistence stuff
+
+- why can't Preview open images? GUI programs often struggle with the
+  filesystem for some reason. CLI more reliable
 
 - multithreading. the key constraint is that I pass `-s` to
   `fuse_main` in `tabfs.c`, which makes everything
@@ -379,18 +390,20 @@ GPLv3
   filesystem, even ones you'd assume are reasonably battle-tested and
   well-engineered like sshfs?
 
+- other performance stuff -- remembering when we're already attached
+  to things, reference counting, minimizing browser roundtrips. not
+  sure impact of these
+
+- TypeScript (how to do with the minimum amount of build system and
+  package manager nonsense?)
+
 - look into support for Firefox / Windows / Safari / etc. best FUSE
   equiv for Windows? can you bridge to the remote debugging APIs that
   all of them already have to get the augmented functionality? or just
   implement it all with JS monkey patching?
 
-- window management. tab management where you can move tabs
-
-- snapshotting (snapshot.html / snapshot.mhtml file)
-
-- fix leaks
-
-- elim unnecessary round-trips / browser API calls
+- window management. tab management where you can move tabs. 'merge
+  all windows'
 
 ## hmm
 
@@ -423,13 +436,29 @@ suggests making an extension is a whole Thing, a whole Project. like,
 why can't I just take a minute to ask my browser a question or tell it
 to automate something? lightness
 
-- a lot of existing uses of these APIs are in an automation context,
-  if you want to test your code on an automated browser. I'm much more
-  interested in an interactive, end-user context. augmenting the way I
-  use my normal browser. that's why this is an extension. it doesn't
-  require your browser to run in some weird remote debugging mode that
-  you'd always forget to turn on. it just [stays
+- a lot of existing uses of these APIs are in an automation context:
+  testing your code on a robotic browser as part of some pipeline. I'm
+  much more interested in an interactive, end-user context. augmenting
+  the way I use my everyday browser. that's why this is an
+  extension. it doesn't require your browser to run in some weird
+  remote debugging mode that you'd always forget to turn on. it just
+  [stays
   running](https://twitter.com/rsnous/status/1340150818553561094)
+
+- system call tracing (dtruss or strace) super useful when anything is
+  going wrong. (need to disable SIP on macOS, though.)  the
+  combination of dtruss (application side) & console logging fs
+  request/response (filesystem side) gives a huge amount of insight
+  into basically any problem, end to end
+
+- for a lot of things in the extension API, the browser can notify you
+  of updates but there's no apparent way to query the full current
+  state. so we'd need to sit in a lot of these places from the
+  beginning and accumulate the incoming events to know, like, the last
+  time a tab was updated, or the list of scripts currently running on
+  a tab
+
+- async/await was absolutely vital to making this readable
 
 - open input space -- filesystem. (it reminds me of Screenotate.)
 

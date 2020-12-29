@@ -52,24 +52,41 @@ async function detachDebugger(tabId) {
     else { resolve(); }
   }));
 }
-const TabManager = {
-  debugTab: async function(tabId) {
-    // meant to be higher-level wrapper for raw attach/detach
-    // TODO: could we remember if we're already attached? idk if it's worth it
-    try { await attachDebugger(tabId); }
-    catch (e) {
-      if (e.message.indexOf('Another debugger is already attached') !== -1) {
-        await detachDebugger(tabId);
-        await attachDebugger(tabId);
-      }
+const TabManager = (function() {
+  if (TESTING) return;
+  chrome.debugger.onEvent.addListener((source, method, params) => {
+    console.log(source, method, params);
+    if (method === "Page.frameStartedLoading") {
+      // we're gonna assume we're always plugged into both Page and Debugger.
+      TabManager.scriptsForTab[source.tabId] = [];
+
+    } else if (method === "Debugger.scriptParsed") {
+      TabManager.scriptsForTab[source.tabId] = TabManager.scriptsForTab[source.tabId] || [];
+      TabManager.scriptsForTab[source.tabId].push(params);
     }
-    // TODO: detach automatically? some kind of reference counting thing?
-  },
-  enableDomainForTab: async function(tabId, domain) {
-    // TODO: could we remember if we're already enabled? idk if it's worth it
-    await sendDebuggerCommand(tabId, `${domain}.enable`, {});
-  }
-};
+  });
+
+  return {
+    scriptsForTab: {},
+    debugTab: async function(tabId) {
+      // meant to be higher-level wrapper for raw attach/detach
+      // TODO: could we remember if we're already attached? idk if it's worth it
+      try { await attachDebugger(tabId); }
+      catch (e) {
+        if (e.message.indexOf('Another debugger is already attached') !== -1) {
+          await detachDebugger(tabId);
+          await attachDebugger(tabId);
+        }
+      }
+      // TODO: detach automatically? some kind of reference counting thing?
+    },
+    enableDomainForTab: async function(tabId, domain) {
+      // TODO: could we remember if we're already enabled? idk if it's worth it
+      if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = []; }
+      await sendDebuggerCommand(tabId, `${domain}.enable`, {});
+    }
+  };
+})();
 function sendDebuggerCommand(tabId, method, commandParams) {
   return new Promise((resolve, reject) =>
     chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
@@ -77,23 +94,6 @@ function sendDebuggerCommand(tabId, method, commandParams) {
     })
   );
 }
-
-const BrowserState = { scriptsForTab: {} };
-(function() {
-  if (TESTING) return;
-
-  chrome.debugger.onEvent.addListener((source, method, params) => {
-    console.log(source, method, params);
-    if (method === "Page.frameStartedLoading") {
-      // we're gonna assume we're always plugged into both Page and Debugger.
-      BrowserState.scriptsForTab[source.tabId] = [];
-
-    } else if (method === "Debugger.scriptParsed") {
-      BrowserState.scriptsForTab[source.tabId] = BrowserState.scriptsForTab[source.tabId] || [];
-      BrowserState.scriptsForTab[source.tabId].push(params);
-    }
-  });
-})();
 
 const router = {};
 
@@ -288,14 +288,16 @@ router["/tabs/by-id/*/control"] = {
     },
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -3));
-      return { entries: [".", "..", ...BrowserState.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
+      return { entries: [".", "..", ...TabManager.scriptsForTab[tabId].map(params => sanitize(params.url).slice(0, 200) + "_" + params.scriptId)] };
     }
   };
   router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId);
+    console.log('BEFORE', TabManager.scriptsForTab[tabId].length);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
+    console.log('AFTER', TabManager.scriptsForTab[tabId].length)
 
     const parts = path.split("_"); const scriptId = parts[parts.length - 1];
     const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});

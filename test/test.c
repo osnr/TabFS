@@ -41,6 +41,9 @@ int main() {
         assert(system("echo file://$(pwd)/test-page.html > ../fs/mnt/tabs/create") == 0);
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/title.txt", "Title of Test Page"));
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/text.txt", "Body Text of Test Page"));
+
+        assert(system("ls ../fs/mnt/tabs/last-focused/debugger/scripts") == 0);
+
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
