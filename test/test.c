@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <wordexp.h>
+#include <regex.h>
 
 int file_contents_equal(char* path, char* contents) {
     // hehe: https://twitter.com/ianh_/status/1340450349065244675
@@ -20,9 +21,16 @@ char* expand(char* phrase) { // expand path with wildcard
     return result.we_wordv[0];
 }
 
+int matches_regex(char* str, char* pattern) {
+    regex_t re; assert(regcomp(&re, pattern, REG_EXTENDED) == 0);
+    int i = regexec(&re, str, 0, NULL, 0);
+    regfree(&re);
+    return i == 0;
+}
+
 // integration tests
 int main() {
-    // if you don't have node, comment this out, I guess:
+    // TODO: invoke over extension
     assert(system("node ../extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests
 
     // reload the extension so we know it's the latest code.
@@ -34,8 +42,14 @@ int main() {
 
     {
         assert(system("echo about:blank > ../fs/mnt/tabs/create") == 0);
-        // FIXME: race here?
-        assert(file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank"));
+        int times = 0;
+        for (;;) {
+            if (file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank")) {
+                break;
+            }
+            usleep(10000);
+            assert(times++ < 10000);
+        }
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
@@ -50,7 +64,7 @@ int main() {
             DIR* scripts = opendir("../fs/mnt/tabs/last-focused/debugger/scripts");
             assert(strcmp(readdir(scripts)->d_name, ".") == 0);
             assert(strcmp(readdir(scripts)->d_name, "..") == 0);
-            assert(strcmp(readdir(scripts)->d_name, "7_file____Users_osnr_Code_tabfs_test_test-script.js") == 0);
+            assert(matches_regex(readdir(scripts)->d_name, "test\\-script.js$"));
             closedir(scripts);
         }
 
