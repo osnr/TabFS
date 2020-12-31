@@ -228,6 +228,49 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
+let nextConsoleFh = 0;
+router["/tabs/by-id/*/console"] = {
+  async open({path}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    const fh = nextConsoleFh++;
+    const code = `
+(function() {
+  console.__logs${fh} = [];
+  console.__logBefore${fh} = console.log;
+  console.log = (...xs) => {
+    console.__logBefore${fh}(...xs);
+    console.__logs${fh}.push(xs);
+  };
+})()
+`;
+    await browser.tabs.executeScript(tabId, {code});
+    return {fh};
+  },
+  async read({path, fh}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    const code = `console.__logs${fh}.join('\n')`;
+    const buf = (await browser.tabs.executeScript(tabId, {code}))[0];
+    return { buf };
+  },
+  async release({fh}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    const code = `
+(function() {
+  console.log = console.__logBefore${fh};
+})()
+`;
+    await browser.tabs.executeScript(tabId, {code});
+    return {};
+  }
+};
+router["/tabs/by-id/*/eval"] = {
+  async write({path, buf}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    await browser.tabs.executeScript(tabId, {code: buf});
+    return {size: stringToUtf8Array(buf).length};
+  },
+  async truncate({path, size}) { return {}; }
+};
 router["/tabs/by-id/*/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
@@ -288,9 +331,8 @@ router["/tabs/by-id/*/control"] = {
     },
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -3));
-      // it's useful to put the ID first so:
-      // 1. the .js extension stays on the end
-      // 2. file prefixes like Emacs temp files, Emacs looking for file with SCCS s. prefix, etc all are clearly invalid automatically
+      // it's useful to put the ID first so the .js extension stays on
+      // the end
       const scriptFileNames = Object.values(TabManager.scriptsForTab[tabId])
             .map(params => params.scriptId + "_" + sanitize(params.url).slice(0, 200));
       return { entries: [".", "..", ...scriptFileNames] };
