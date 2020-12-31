@@ -228,43 +228,55 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
-let nextConsoleFh = 0;
+let nextConsoleFh = 0; let consoleForFh = {};
 router["/tabs/by-id/*/console"] = {
   async open({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     const fh = nextConsoleFh++;
     const code = `
-(function() {
-  console.__logs${fh} = [];
-  console.__logBefore${fh} = console.log;
-  console.log = (...xs) => {
-    console.__logBefore${fh}(...xs);
-    console.__logs${fh}.push(xs);
-  };
-})()
+// runs in 'content script' context
+var script = document.createElement('script');
+var code = document.createTextNode(\`
+  // runs in real Web page context (this is where we want to hook console.log)
+  (function() {
+    if (!console.__logOld) console.__logOld = console.log;
+    console.log = (...xs) => {
+      console.__logOld(...xs);
+      // TODO: use random event for security instead of this broadcast
+      window.postMessage({fh: ${fh}, xs: xs}, '*');
+    };
+  })()
+\`);
+script.appendChild(code);
+(document.body || document.head).appendChild(script);
+
+window.addEventListener('message', function({data}) {
+  if (data.fh !== ${fh}) return;
+  chrome.runtime.sendMessage(null, data);
+});
 `;
+    consoleForFh[fh] = [];
+    chrome.runtime.onMessage.addListener(data => {
+      if (data.fh !== fh) return;
+      consoleForFh[fh].push(data.xs);
+    });
     await browser.tabs.executeScript(tabId, {code});
     return {fh};
   },
   async read({path, fh}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    const code = `console.__logs${fh}.join('\n')`;
-    const buf = (await browser.tabs.executeScript(tabId, {code}))[0];
+    const buf = consoleForFh[fh].join('\n');
     return { buf };
   },
   async release({fh}) {
     const tabId = parseInt(pathComponent(path, -2));
-    const code = `
-(function() {
-  console.log = console.__logBefore${fh};
-})()
-`;
-    await browser.tabs.executeScript(tabId, {code});
+    // TODO: clean up everything
     return {};
   }
 };
 router["/tabs/by-id/*/eval"] = {
   async write({path, buf}) {
+    // FIXME: chunk this properly (like if they write a script in
+    // multiple chunks) and only execute when ready?
     const tabId = parseInt(pathComponent(path, -2));
     await browser.tabs.executeScript(tabId, {code: buf});
     return {size: stringToUtf8Array(buf).length};
