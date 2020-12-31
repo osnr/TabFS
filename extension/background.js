@@ -229,51 +229,72 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
 let nextConsoleFh = 0; let consoleForFh = {};
+chrome.runtime.onMessage.addListener(data => {
+  if (!consoleForFh[data.fh]) return;
+  consoleForFh[data.fh].push(data.xs);
+});
 router["/tabs/by-id/*/console"] = {
+  // this one is a bit weird. it doesn't start tracking until it's opened.
+  // tail -f console
+  async getattr() {
+    return {
+      st_mode: unix.S_IFREG | 0444,
+      st_nlink: 1,
+      st_size: 0 // FIXME
+    };
+  },
   async open({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     const fh = nextConsoleFh++;
     const code = `
 // runs in 'content script' context
 var script = document.createElement('script');
-var code = document.createTextNode(\`
-  // runs in real Web page context (this is where we want to hook console.log)
+var code = \`
+  // will run both here in content script context and in
+  // real Web page context (so we hook console.log for both)
   (function() {
     if (!console.__logOld) console.__logOld = console.log;
+    if (!console.__logFhs) console.__logFhs = new Set();
+    console.__logFhs.add(${fh});
     console.log = (...xs) => {
       console.__logOld(...xs);
       // TODO: use random event for security instead of this broadcast
-      window.postMessage({fh: ${fh}, xs: xs}, '*');
+      for (let fh of console.__logFhs) {
+        window.postMessage({fh: ${fh}, xs: xs}, '*');
+      }
     };
   })()
-\`);
-script.appendChild(code);
+\`;
+eval(code);
+script.appendChild(document.createTextNode(code));
 (document.body || document.head).appendChild(script);
 
 window.addEventListener('message', function({data}) {
   if (data.fh !== ${fh}) return;
+  // forward to the background script
   chrome.runtime.sendMessage(null, data);
 });
 `;
     consoleForFh[fh] = [];
-    chrome.runtime.onMessage.addListener(data => {
-      if (data.fh !== fh) return;
-      consoleForFh[fh].push(data.xs);
-    });
     await browser.tabs.executeScript(tabId, {code});
     return {fh};
   },
-  async read({path, fh}) {
-    const buf = consoleForFh[fh].join('\n');
+  async read({path, fh, offset, size}) {
+    const all = consoleForFh[fh].join('\n');
+    // TODO: do this more incrementally ?
+    // will probably break down if log is huge
+    const buf = String.fromCharCode(...toUtf8Array(all).slice(offset, offset + size));
     return { buf };
   },
-  async release({fh}) {
+  async release({path, fh}) {
     const tabId = parseInt(pathComponent(path, -2));
-    // TODO: clean up everything
+    // TODO: clean up the hooks inside the contexts
+    delete consoleForFh[fh];
     return {};
   }
 };
-router["/tabs/by-id/*/eval"] = {
+router["/tabs/by-id/*/execute-script"] = {
+  // note: runs in a content script, _not_ in the Web page context
   async write({path, buf}) {
     // FIXME: chunk this properly (like if they write a script in
     // multiple chunks) and only execute when ready?

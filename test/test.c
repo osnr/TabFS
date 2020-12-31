@@ -31,7 +31,7 @@ int matches_regex(char* str, char* pattern) {
 // integration tests
 int main() {
     // TODO: invoke over extension
-    assert(system("node ../extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests
+    /* assert(system("node ../extension/background.js --unhandled-rejections=strict") == 0); // run quick local JS tests */
 
     // reload the extension so we know it's the latest code.
     system("echo reload > ../fs/mnt/runtime/reload 2>/dev/null"); // this may error, but it should still have effect
@@ -50,6 +50,7 @@ int main() {
             usleep(10000);
             assert(times++ < 10000);
         }
+
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
@@ -69,6 +70,14 @@ int main() {
         }
         assert(system("cat ../fs/mnt/tabs/last-focused/debugger/scripts/*test-script.js") == 0);
 
+        {
+            FILE* console = fopen("../fs/mnt/tabs/last-focused/console", "r");
+            assert(system("echo \"console.log('hi')\" > ../fs/mnt/tabs/last-focused/execute-script") == 0);
+            char hi[3] = {0}; fread(hi, 1, 2, console);
+            assert(strcmp(hi, "hi") == 0);
+            fclose(console);
+        }
+        
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
