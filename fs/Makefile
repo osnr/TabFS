@@ -7,7 +7,7 @@ OSXFUSE_ROOT = /usr/local
 CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wno-unused-function -g
 
 ifeq ($(shell uname -s),Linux)
-	CFLAGS = $(CFLAGS_EXTRA)
+	CFLAGS += $(CFLAGS_EXTRA)
 	LIBS = -lfuse
 endif
 ifeq ($(shell uname -s),Darwin)
