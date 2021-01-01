@@ -54,7 +54,7 @@ async function detachDebugger(tabId) {
 }
 const TabManager = (function() {
   if (TESTING) return;
-  chrome.debugger.onEvent.addListener((source, method, params) => {
+  if (chrome.debugger) chrome.debugger.onEvent.addListener((source, method, params) => {
     console.log(source, method, params);
     if (method === "Page.frameStartedLoading") {
       // we're gonna assume we're always plugged into both Page and Debugger.
@@ -347,6 +347,7 @@ router["/tabs/by-id/*/control"] = {
 
 // debugger/ : debugger-API-dependent (Chrome-only)
 (function() {
+  if (!chrome.debugger) return;
   // possible idea: console (using Log API instead of monkey-patching)
   // resources/
   // TODO: scripts/ TODO: allow creation, eval immediately

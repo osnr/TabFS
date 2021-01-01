@@ -225,15 +225,17 @@ import a plotting library or whatever the same way? dragging
 `imports.plotlib()` to invoke that JS file
 
 the browser has a lot of potential power as an interactive programming
-environment with built-in stuff. i think something that holds it back
-that is underexplored is lack of ability to just... drag files in and
-manage them with decent tools. many Web-based 'IDEs' have to reinvent
-file management, etc from scratch, and it's like a separate universe
-from the rest of your computer, and migrating between one and the
-other is a real pain (if you want to use some Python library to munge
-some data and then have a Web-based visualization of it, for instance,
-or if you want to version files inside it, or make snapshots so you
-[feel
+environment, one where graphics come [as
+naturally](https://twitter.com/rsnous/status/1295828978477932544) as
+console I/O do in most programming languages. i think something that
+holds it back that is underexplored is lack of ability to just... drag
+files in and manage them with decent tools. many Web-based 'IDEs' have
+to reinvent file management, etc from scratch, and it's like a
+separate universe from the rest of your computer, and migrating
+between one and the other is a real pain (if you want to use some
+Python library to munge some data and then have a Web-based
+visualization of it, for instance, or if you want to version files
+inside it, or make snapshots so you [feel
 comfortable](https://twitter.com/rsnous/status/1288725175895068673)
 trying stuff, etc).
 
@@ -242,8 +244,12 @@ interesting because I almost want each tab to be [less of a
 commodity](https://twitter.com/rsnous/status/1344753559007420416),
 less
 [disposable](https://twitter.com/rsnous/status/1270192308772691968),
-since it's the site I'm dragging stuff to and it might have some
-persistent state attached)
+since now it's the site I'm dragging stuff to and it might have some
+persistent state attached. like, if I'm programming and editing stuff
+and saving inside a tab's folder, that tab suddenly really
+[matters](https://twitter.com/rsnous/status/1251863115022491653); I
+want it to survive as long as a normal file would, unlike most browser
+tabs today)
 
 ## Setup
 
