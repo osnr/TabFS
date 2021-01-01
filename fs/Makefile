@@ -7,11 +7,11 @@ OSXFUSE_ROOT = /usr/local
 CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wno-unused-function -g
 
 ifeq ($(shell uname -s),Linux)
-	CFLAGS = $(CFLAGS_EXTRA)
+	CFLAGS ::= $(CFLAGS_EXTRA) $(CFLAGS)
 	LIBS = -lfuse
 endif
 ifeq ($(shell uname -s),Darwin)
-	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
+	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA) $(CFLAGS)
 	LIBS = -losxfuse
 endif
 
