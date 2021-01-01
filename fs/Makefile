@@ -11,7 +11,7 @@ ifeq ($(shell uname -s),Linux)
 	LIBS = -lfuse
 endif
 ifeq ($(shell uname -s),Darwin)
-	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS)
+	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
 	LIBS = -losxfuse
 endif
 
