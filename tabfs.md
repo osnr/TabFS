@@ -6,6 +6,8 @@ title: TabFS
 <style>
 body { font-family: Verdana, sans-serif; background: #eee; }
 h1 { font-family: Helvetica; }
+#TableOfContents > ul > li:first-child { display: none; }
+#TableOfContents a[rel=footnote] { display: none; }
 </style>
 
 [TabFS](https://github.com/osnr/TabFS) is a browser extension that
@@ -61,6 +63,10 @@ it as [a single ordinary
 file](https://twitter.com/rsnous/status/1308588645872435202) that you
 can run whenever, and it's no different from scripting any other part
 of your computer.
+
+### table of contents 
+
+{{< table_of_contents >}}
 
 ## Examples of stuff you can do![^examples]
 
@@ -145,6 +151,13 @@ could do in the first place)
 $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 ```
 
+### Run script
+
+```
+$ echo 'document.body.style.background = "green"' > mnt/tabs/last-focused/execute-script
+$ echo 'alert("hi!")' > mnt/tabs/last-focused/execute-script
+```
+
 ### Reload an extension when you edit its source code
 
 Suppose you're working on a Chrome extension (apart from this
@@ -177,18 +190,60 @@ that every time I want to reload my extension code.
 
 ### TODO: Live edit a running Web page
 
-(TODO: it would be cool to have a persistent storage story here)
+edit `page.html` in the tab folder. I guess it could just stomp
+outerHTML at first, eventually could do something more sophisticated
 
-### TODO: Something with live view of variables
+(it would be cool to have a persistent storage story here
+also. I like the idea of being able to put arbitrary files anywhere in
+the subtree, actually, because then you could use git and emacs
+autosave and stuff for free... hmm)
 
-two floating windows. watch
-mouse position?
+### TODO: Watch expressions
 
-### TODO: Import data (JSON or XLS). Persistent storage?
+```
+$ touch mnt/tabs/last-focused/watches/window.scrollY
+```
 
-hehehehehehehehehe
+Now you can `cat window.scrollY` and see where you are scrolled on the
+page at any time.
 
-import a plotting library too?
+Could make an [ad-hoc
+dashboard](https://twitter.com/rsnous/status/1080878682275803137)
+around a Web page: a bunch of terminal windows floating around your
+screen, each sitting in a loop and using `cat` to monitor a different
+variable.
+
+### TODO: Import data (JSON? XLS? JS?)
+
+drag a JSON file `foo.json` into the `imports` subfolder of the tab
+and it shows up as the object `imports.foo` in JS. (modify
+`imports.foo` in JS and then read `imports/foo.json` and you read the
+changes back?)
+
+import a plotting library or whatever the same way? dragging
+`plotlib.js` into `imports/plotlib.js` and then calling
+`imports.plotlib()` to invoke that JS file
+
+the browser has a lot of potential power as an interactive programming
+environment with built-in stuff. i think something that holds it back
+that is underexplored is lack of ability to just... drag files in and
+manage them with decent tools. many Web-based 'IDEs' have to reinvent
+file management, etc from scratch, and it's like a separate universe
+from the rest of your computer, and migrating between one and the
+other is a real pain (if you want to use some Python library to munge
+some data and then have a Web-based visualization of it, for instance,
+or if you want to version files inside it, or make snapshots so you
+[feel
+comfortable](https://twitter.com/rsnous/status/1288725175895068673)
+trying stuff, etc).
+
+(what would the persistent storage story here be? localStorage? it's
+interesting because I almost want each tab to be [less of a
+commodity](https://twitter.com/rsnous/status/1344753559007420416),
+less
+[disposable](https://twitter.com/rsnous/status/1270192308772691968),
+since it's the site I'm dragging stuff to and it might have some
+persistent state attached)
 
 ## Setup
 
@@ -265,6 +320,12 @@ or
 
 ```
 $ ./install.sh chromium jimpolemfaeckpjijgapgkmolankohgj
+```
+
+#### Firefox
+
+```
+$ ./install.sh firefox
 ```
 
 ### 3. Ready!
@@ -366,7 +427,12 @@ GPLv3
 
 - build more (GUI and CLI) tools on top, on both sides
 
-- more persistence stuff
+- more persistence stuff. as I said earlier, it would also be cool if
+  you could put arbitrary files in the subtrees, so .git, Mac extended
+  attrs, editor temp files, etc all work. make it able to behave like
+  a 'real' filesystem. also as I said earlier, some weirdness in the
+  fact that tabs are so disposable; they have a very different
+  lifecycle from most parts of my real filesystem. how to nudge that?
 
 - why can't Preview open images? GUI programs often struggle with the
   filesystem for some reason. CLI more reliable
@@ -407,12 +473,12 @@ GPLv3
 
 ## hmm
 
-- there's a famous (?) paper, [Processes as Files
+- [Processes as Files
 (1984)](https://lucasvr.gobolinux.org/etc/Killian84-Procfs-USENIX.pdf),
-which lays out the case for the `/proc` filesystem. it's very cool!
-very elegant in how it reapplies the existing interface of files to
-the new domain of Unix processes. but how much do I care about Unix
-processes now? most
+[Julia Evans /proc comic](https://drawings.jvns.ca/proc/) lay out the
+original `/proc` filesystem. it's very cool!  very elegant in how it
+reapplies the existing interface of files to the new domain of Unix
+processes. but how much do I care about Unix processes now? most
 [programs](https://twitter.com/rsnous/status/1176587656915849218) that
 I care about running on my computer these days are Web pages, [not
 Unix
@@ -420,7 +486,7 @@ processes](https://twitter.com/rsnous/status/1076229968017772544). so
 I want to take the approach of `/proc` -- 'expose the stuff you care
 about as a filesystem' -- and apply it to something
 [modern](https://twitter.com/rsnous/status/1251342095698112512): the
-inside of the browser. can we have 'browser tabs as files'?
+inside of the browser. 'browser tabs as files'
 
 - there are two 'operating systems' on my computer, the browser and
 Unix, and Unix is by far the more accessible and programmable and
@@ -436,20 +502,28 @@ suggests making an extension is a whole Thing, a whole Project. like,
 why can't I just take a minute to ask my browser a question or tell it
 to automate something? lightness
 
-- a lot of existing uses of these APIs are in an automation context:
-  testing your code on a robotic browser as part of some pipeline. I'm
-  much more interested in an interactive, end-user context. augmenting
-  the way I use my everyday browser. that's why this is an
-  extension. it doesn't require your browser to run in some weird
-  remote debugging mode that you'd always forget to turn on. it just
-  [stays
+- a lot of existing uses of these browser control APIs are in an
+  automation context: testing your code on a robotic browser as part
+  of some pipeline. I'm much more interested in an interactive,
+  end-user context. augmenting the way I use my everyday
+  browser. that's why this is an extension. it doesn't require your
+  browser to run in some weird remote debugging mode that you'd always
+  forget to turn on. it just [stays
   running](https://twitter.com/rsnous/status/1340150818553561094)
 
-- system call tracing (dtruss or strace) super useful when anything is
-  going wrong. (need to disable SIP on macOS, though.)  the
-  combination of dtruss (application side) & console logging fs
-  request/response (filesystem side) gives a huge amount of insight
-  into basically any problem, end to end
+- [system call tracing](https://jvns.ca/strace-zine-v2.pdf) (dtruss or
+  strace) super useful when anything is going wrong. (need to disable
+  SIP on macOS, though.)  the combination of dtruss (application side)
+  & console logging fs request/response (filesystem side) gives a huge
+  amount of insight into basically any problem, end to end
+
+    - there is sort of this sequence that I learned to try with
+      anything. first, either simple shell commands or pure C calls --
+      shell commands are more ergonomic, C calls have the clearest
+      mental model of what syscalls they actually invoke. only then do
+      you move to the text editor or the Mac Finder, which are a lot
+      fancier and throw a lot more stuff at the filesystem at once (so
+      more can go wrong)
 
 - for a lot of things in the extension API, the browser can notify you
   of updates but there's no apparent way to query the full current
@@ -460,7 +534,14 @@ to automate something? lightness
 
 - async/await was absolutely vital to making this readable
 
-- open input space -- filesystem. (it reminds me of Screenotate.)
+- filesystem as 'open input space' where there are things you can say
+  beyond what this particular filesystem cares about. (it reminds me
+  of my [Screenotate](https://screenotate.com) -- screenshots give you
+  this open field where you can [carry
+  through](https://twitter.com/rsnous/status/1221687986510680064)
+  stuff that the OCR doesn't necessarily recognize or care about. same
+  for the real world in Dynamicland; you can scribble notes or
+  whatever even if the computer doesn't see them)
 
 - now you have this whole 'language', this whole toolset, to control
 and automate your browser. there's this built-up existing capital
@@ -474,13 +555,35 @@ files
   my tabs, to help me develop other things in the browser so I'd have
   actions I could trigger from my editor, ...
 
-- stuff that looks cool:
+- stuff that looks cool / is related:
 
-    - SQLite. OSQuery
+    - [SQLite virtual tables](https://www.sqlite.org/vtablist.html)
+      have some of the same energy as FUSE synthetic filesystems to
+      me, except instead of 'file operations', 'SQL' is the well-known
+      interface / knowledge base / ecosystem that they
+      [piggyback](https://twitter.com/rsnous/status/1237986368812224513)
+      on. [osquery](https://osquery.readthedocs.io/en/stable/) seems
+      particularly cool
 
-    - <https://luciopaiva.com/witchcraft/> it has the right idea
+    - Plan 9. I think a lot about [extensibility in the Acme text
+      editor](https://mostlymaths.net/2013/03/extensibility-programming-acme-text-editor.html/),
+      where
+      [instead](https://twitter.com/geoffreylitt/status/1265384495542415360)
+      of a 'plugin API', the editor just provides a synthetic
+      filesystem
 
-- fake filesystems talk
+    - my [fake filesystems talk](https://www.youtube.com/watch?v=pfHpDDXJQVg)
+
+    - <https://luciopaiva.com/witchcraft/> it has the right idea for
+      how to set up userscripts. just make files -- don't make [your
+      own weird UI to add and remove
+      them](https://twitter.com/rsnous/status/1196536798312140800). (I
+      guess there is a political or audience
+      [tradeoff](https://twitter.com/rsnous/status/1290031845363466242)
+      here, where [some
+      kinds](https://twitter.com/rsnous/status/1039036578427891713) of
+      users might be comfortable with managing files, but you might
+      alienate others. hmm)
 
 - [rmdir a non-empty
   directory](https://twitter.com/rsnous/status/1107427906832089088)

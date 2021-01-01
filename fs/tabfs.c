@@ -176,21 +176,38 @@ static int tabfs_unlink(const char *path) {
     return 0;
 }
 
+static int tabfs_mkdir(const char *path, mode_t mode) {
+    send_request("{op: %Q, path: %Q, mode: %d}", "mkdir", path, mode);
+
+    receive_response("{}", NULL);
+    return 0;
+}
+
+static int tabfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    send_request("{op: %Q, path: %Q, mode: %d}", "mkdir", path, mode);
+
+    receive_response("{}", NULL);
+    return 0;
+}
+
 static struct fuse_operations tabfs_filesystem_operations = {
-    .getattr  = tabfs_getattr, /* To provide size, permissions, etc. */
+    .getattr  = tabfs_getattr,
     .readlink = tabfs_readlink,
 
-    .open     = tabfs_open,    /* To enforce read-only access.       */
-    .read     = tabfs_read,    /* To provide file content.           */
+    .open     = tabfs_open,
+    .read     = tabfs_read,
     .write    = tabfs_write,
     .release  = tabfs_release,
 
     .opendir  = tabfs_opendir,
-    .readdir  = tabfs_readdir, /* To provide directory listing.      */
+    .readdir  = tabfs_readdir,
     .releasedir = tabfs_releasedir,
 
     .truncate  = tabfs_truncate,
-    .unlink = tabfs_unlink
+    .unlink = tabfs_unlink,
+
+    .mkdir = tabfs_mkdir,
+    .create = tabfs_create
 };
 
 int main(int argc, char **argv) {

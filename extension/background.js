@@ -228,25 +228,26 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
 })();
-let nextConsoleFh = 0; let consoleForFh = {};
-chrome.runtime.onMessage.addListener(data => {
-  if (!consoleForFh[data.fh]) return;
-  consoleForFh[data.fh].push(data.xs);
-});
-router["/tabs/by-id/*/console"] = {
-  // this one is a bit weird. it doesn't start tracking until it's opened.
-  // tail -f console
-  async getattr() {
-    return {
-      st_mode: unix.S_IFREG | 0444,
-      st_nlink: 1,
-      st_size: 0 // FIXME
-    };
-  },
-  async open({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    const fh = nextConsoleFh++;
-    const code = `
+(function() {
+  let nextConsoleFh = 0; let consoleForFh = {};
+  chrome.runtime.onMessage.addListener(data => {
+    if (!consoleForFh[data.fh]) return;
+    consoleForFh[data.fh].push(data.xs);
+  });
+  router["/tabs/by-id/*/console"] = {
+    // this one is a bit weird. it doesn't start tracking until it's opened.
+    // tail -f console
+    async getattr() {
+      return {
+        st_mode: unix.S_IFREG | 0444,
+        st_nlink: 1,
+        st_size: 0 // FIXME
+      };
+    },
+    async open({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      const fh = nextConsoleFh++;
+      const code = `
 // runs in 'content script' context
 var script = document.createElement('script');
 var code = \`
@@ -258,10 +259,13 @@ var code = \`
     console.__logFhs.add(${fh});
     console.log = (...xs) => {
       console.__logOld(...xs);
-      // TODO: use random event for security instead of this broadcast
-      for (let fh of console.__logFhs) {
-        window.postMessage({fh: ${fh}, xs: xs}, '*');
-      }
+      try {
+        // TODO: use random event for security instead of this broadcast
+        for (let fh of console.__logFhs) {
+          window.postMessage({fh: ${fh}, xs: xs}, '*');
+        }
+      // error usually if one of xs is not serializable
+      } catch (e) { console.error(e); }
     };
   })()
 \`;
@@ -275,24 +279,25 @@ window.addEventListener('message', function({data}) {
   chrome.runtime.sendMessage(null, data);
 });
 `;
-    consoleForFh[fh] = [];
-    await browser.tabs.executeScript(tabId, {code});
-    return {fh};
-  },
-  async read({path, fh, offset, size}) {
-    const all = consoleForFh[fh].join('\n');
-    // TODO: do this more incrementally ?
-    // will probably break down if log is huge
-    const buf = String.fromCharCode(...toUtf8Array(all).slice(offset, offset + size));
-    return { buf };
-  },
-  async release({path, fh}) {
-    const tabId = parseInt(pathComponent(path, -2));
-    // TODO: clean up the hooks inside the contexts
-    delete consoleForFh[fh];
-    return {};
-  }
-};
+      consoleForFh[fh] = [];
+      await browser.tabs.executeScript(tabId, {code});
+      return {fh};
+    },
+    async read({path, fh, offset, size}) {
+      const all = consoleForFh[fh].join('\n');
+      // TODO: do this more incrementally ?
+      // will probably break down if log is huge
+      const buf = String.fromCharCode(...toUtf8Array(all).slice(offset, offset + size));
+      return { buf };
+    },
+    async release({path, fh}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      // TODO: clean up the hooks inside the contexts
+      delete consoleForFh[fh];
+      return {};
+    }
+  };
+})();
 router["/tabs/by-id/*/execute-script"] = {
   // note: runs in a content script, _not_ in the Web page context
   async write({path, buf}) {
@@ -304,6 +309,22 @@ router["/tabs/by-id/*/execute-script"] = {
   },
   async truncate({path, size}) { return {}; }
 };
+// TODO: imports
+// (function() {
+//   const imports = {};
+//   // .json - autoparse, spit back out changes in data
+//   // .js
+//   // .png
+//   // write back modify
+//   router["/tabs/by-id/*/imports"] = {
+//     readdir({path}) {
+      
+//     }
+//   };
+// })();
+// TODO: watches
+// router["/tabs/by-id/*/watches"] = {
+// };
 router["/tabs/by-id/*/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
@@ -326,7 +347,7 @@ router["/tabs/by-id/*/control"] = {
 
 // debugger/ : debugger-API-dependent (Chrome-only)
 (function() {
-  // console
+  // possible idea: console (using Log API instead of monkey-patching)
   // resources/
   // TODO: scripts/ TODO: allow creation, eval immediately
 
