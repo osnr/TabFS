@@ -1,5 +1,12 @@
 ---
 title: TabFS
+meta: |
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@rsnous">
+  <meta name="twitter:creator" content="@rsnous">
+  <meta name="twitter:title" content="TabFS">
+  <meta name="twitter:description" content="A browser extension that mounts your browser tabs as a filesystem on your computer.">
+  <meta name="twitter:image" content="https://omar.website/projects/tabfs.png">
 ---
 <!-- I'm setting this page in Verdana-on-gray so I feel more comfortable -->
 <!-- jotting random notes and stuff down. -->
