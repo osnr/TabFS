@@ -15,6 +15,7 @@ body { font-family: Verdana, sans-serif; background: #eee; }
 h1 { font-family: Helvetica; }
 #TableOfContents > ul > li:first-child { display: none; }
 #TableOfContents a[rel=footnote] { display: none; }
+pre { white-space: pre-wrap; }
 </style>
 
 [TabFS](https://github.com/osnr/TabFS) is a browser extension that
@@ -270,6 +271,12 @@ point](https://twitter.com/rsnous/status/1338932056743546880) of this
 extension is to create a gigantic new surface area of communication
 between stuff inside your browser and software on the rest of your
 computer.
+
+Before doing anything, clone [this repository](https://github.com/osnr/TabFS):
+
+```
+$ git clone https://github.com/osnr/TabFS.git
+```
 
 First, install the browser extension.
 
