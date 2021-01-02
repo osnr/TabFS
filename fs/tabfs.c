@@ -216,6 +216,8 @@ int main(int argc, char **argv) {
     system(killcmd);
 #ifdef __APPLE__
     system("diskutil umount force mnt > /dev/null");
+#elif __FreeBSD__
+    system("umount -f mnt");
 #else
     system("fusermount -u mnt");
 #endif

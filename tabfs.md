@@ -324,6 +324,8 @@ $ mkdir mnt
 $ make
 ```
 
+(GNU Make is required, so use gmake on FreeBSD)
+
 Now install the native messaging host into your browser, so the
 extension can launch and talk to the filesystem:
 
