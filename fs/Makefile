@@ -4,6 +4,9 @@ TARGETS = tabfs
 OSXFUSE_ROOT = /usr/local
 #OSXFUSE_ROOT = /opt/local
 
+# Root for libraries from FreeBSD's ports
+FREEBSD_ROOT = /usr/local
+
 CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wno-unused-function -g
 
 ifeq ($(shell uname -s),Linux)
@@ -13,6 +16,10 @@ endif
 ifeq ($(shell uname -s),Darwin)
 	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
 	LIBS = -losxfuse
+endif
+ifeq ($(shell uname -s),FreeBSD)
+	CFLAGS += -L$(FREEBSD_ROOT)/lib -I$(FREEBSD_ROOT)/include $(CFLAGS_EXTRA)
+	LIBS = -lfuse
 endif
 
 all: $(TARGETS)
