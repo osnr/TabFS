@@ -1,4 +1,6 @@
-#!/bin/bash -eux
+#!/usr/bin/env bash
+
+set -eux
 
 if [[ "$#" -lt 1 || (
           ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
@@ -16,10 +18,14 @@ BROWSER="$(echo $1 | tr '[:upper:]' '[:lower:]')"
 case "$OS $BROWSER" in
     "Linux firefox")
         MANIFEST_LOCATION="$HOME/.mozilla/native-messaging-hosts";;
+    "FreeBSD firefox")
+        MANIFEST_LOCATION="$HOME/.mozilla/native-messaging-hosts";;
     "Darwin firefox")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts";;
     "Linux chrome")
         MANIFEST_LOCATION="$HOME/.config/google-chrome/NativeMessagingHosts";;
+    "FreeBSD chromium")
+        MANIFEST_LOCATION="$HOME/.config/chromium/NativeMessagingHosts";;
     "Linux chromium")
         MANIFEST_LOCATION="$HOME/.config/chromium/NativeMessagingHosts";;
     "Darwin chrome")

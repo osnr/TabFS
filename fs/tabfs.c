@@ -225,6 +225,8 @@ int main(int argc, char **argv) {
     char unmountcmd[1000];
 #ifdef __APPLE__
     sprintf(unmountcmd, "diskutil umount force %s > /dev/null", mountdir);
+#elif __FreeBSD__
+    sprintf(unmountcmd, "umount -f %s", mountdir);
 #else
     sprintf(unmountcmd, "fusermount -u %s", mountdir);
 #endif

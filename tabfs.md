@@ -39,8 +39,8 @@ Firefox, on macOS and Linux.[^otherbrowsers]
 Each of your open tabs is mapped to a folder.
 
 <div class="figure">
-<img src="doc/00-browser.png" style="width: 70%">
-<img src="doc/00-finder.png" style="width: 80%; max-height: 1000px">
+<a href="doc/00-browser.png"><img src="doc/00-browser.png" style="width: 70%"></a>
+<a href="doc/00-finder.png"><img src="doc/00-finder.png" style="width: 80%; max-height: 1000px"></a>
 <p class="caption" style="margin-top: -20px">I have 3 tabs open, and
 they map to 3 folders in TabFS</p>
 </div>
@@ -165,6 +165,20 @@ $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 $ echo 'document.body.style.background = "green"' > mnt/tabs/last-focused/execute-script
 $ echo 'alert("hi!")' > mnt/tabs/last-focused/execute-script
 ```
+
+### Get images / scripts / etc on page
+
+(TODO: [document better](https://github.com/osnr/TabFS/issues/5), put in screenshots)
+
+The [`debugger/`
+subdirectory](https://github.com/osnr/TabFS/blob/fef9289e3a7f82cda6319d5f19d5a5f13f3cc44b/extension/background.js#L355)
+in each tab folder has synthetic files that let you access loaded
+resources (in `debugger/resources/`) and scripts (in
+`debugger/scripts/`). (this is experimental)
+
+### Retrieve what's playing on YouTube Music: [youtube-music-tabfs](https://github.com/junhoyeo/youtube-music-tabfs)
+
+[thanks](https://www.reddit.com/r/programming/comments/kok4dw/tabfs_mount_your_browser_tabs_as_a_filesystem/ghtbgw1/) to [Junho Yeo](https://github.com/junhoyeo)!
 
 ### Reload an extension when you edit its source code
 
@@ -314,7 +328,9 @@ Choose manifest.json in the extension subfolder of this repo.
 
 First, make sure you have FUSE and FUSE headers. On Linux, for example,
 `sudo apt install libfuse-dev` or equivalent. On macOS, get [FUSE for
-macOS](https://osxfuse.github.io/).
+macOS](https://osxfuse.github.io/). (on macOS, also check [this
+bug](https://github.com/osnr/TabFS/issues/11) -- TODO work out the
+best path to explain here.)
 
 Then compile the C filesystem:
 
@@ -323,6 +339,8 @@ $ cd fs
 $ mkdir mnt
 $ make
 ```
+
+(GNU Make is required, so use gmake on FreeBSD)
 
 Now install the native messaging host into your browser, so the
 extension can launch and talk to the filesystem:
@@ -361,7 +379,7 @@ in the extension's entry in the Chrome extensions page; in Firefox,
 click "Inspect")
 
 <div class="figure">
-<img style="max-width: 90%; max-height: 1000px" src="doc/inspector.png">
+<a href="doc/inspector.png"><img style="max-width: 90%; max-height: 1000px" src="doc/inspector.png"></a>
 </div>
 
 This console is also incredibly helpful for debugging anything that
@@ -441,9 +459,12 @@ GPLv3
 
 ## things that could/should be done
 
-- add more synthetic files!! view DOM nodes, snapshot current HTML of
-  page, spelunk into living objects. see what your code is doing. make
-  more files writable also
+(maybe you can do these?)
+
+- [add more synthetic files!! (it's just
+  JavaScript)](https://twitter.com/rsnous/status/1345113873792126976)
+  view DOM nodes, snapshot current HTML of page, spelunk into living
+  objects. see what your code is doing. make more files writable also
 
 - build more (GUI and CLI) tools on top, on both sides
 
@@ -512,8 +533,8 @@ inside of the browser. 'browser tabs as files'
 Unix, and Unix is by far the more accessible and programmable and
 cohesive as a computing environment (it has concepts that compose!
 shell, processes, files), even though it's arguably the less important
-to my daily life. how can the browser take on more of the properties
-of Unix?
+to my daily life. [how can the browser take on more of the properties
+of Unix?](https://twitter.com/jcreed/status/1344982366243213312)
 
 - it's [way too
 hard](https://twitter.com/rsnous/status/1342236988938719232) to make a
@@ -521,6 +542,11 @@ browser extension. even 'make an extension' is a bad framing; it
 suggests making an extension is a whole Thing, a whole Project. like,
 why can't I just take a minute to ask my browser a question or tell it
 to automate something? lightness
+
+- ["files are a sort of approachable 'bridge' that everyone knows how
+  to interact with" / files are like one of the first things you learn
+  if you know any programming language / "because of this fs thing any
+  beginner coding thing can make use of it now"](https://twitter.com/rsnous/status/1345490658836926464)
 
 - a lot of existing uses of these browser control APIs are in an
   automation context: testing your code on a robotic browser as part
@@ -594,9 +620,9 @@ files
 
     - my [fake filesystems talk](https://www.youtube.com/watch?v=pfHpDDXJQVg)
 
-    - <https://luciopaiva.com/witchcraft/> it has the right idea for
-      how to set up userscripts. just make files -- don't make [your
-      own weird UI to add and remove
+    - [Witchcraft](https://luciopaiva.com/witchcraft/) has the right
+      idea for how to set up userscripts. just make files -- don't
+      make [your own weird UI to add and remove
       them](https://twitter.com/rsnous/status/1196536798312140800). (I
       guess there is a political or audience
       [tradeoff](https://twitter.com/rsnous/status/1290031845363466242)
