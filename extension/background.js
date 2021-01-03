@@ -437,7 +437,7 @@ router["/tabs/by-title/*"] = {
   // TODO: date
   async readlink({path}) { // a symbolic link to /tabs/by-id/[id for this tab]
     const parts = path.split("_"); const tabId = parts[parts.length - 1];
-    return { buf: "../by-id/" + tabId };
+    return { buf: "../../tabs/by-id/" + tabId };
   },
   async unlink({path}) { // you can delete a by-title/TAB to close that tab
     const parts = path.split("_"); const tabId = parseInt(parts[parts.length - 1]);
@@ -449,7 +449,7 @@ router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink({path}) {
     const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
-    return { buf: "by-id/" + id };
+    return { buf: "by-id/../by-id/" + id };
   }
 };
 
