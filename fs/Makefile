@@ -7,25 +7,26 @@ OSXFUSE_ROOT = /usr/local
 # Root for libraries from FreeBSD's ports
 FREEBSD_ROOT = /usr/local
 
-CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wno-unused-function -g
+CFLAGS ?= -O2
+CFLAGS_EXTRA = -DFUSE_USE_VERSION=26 -D_FILE_OFFSET_BITS=64 -Wall -Wextra -Wno-unused-result -g
 
 ifeq ($(shell uname -s),Linux)
 	CFLAGS += $(CFLAGS_EXTRA)
-	LIBS = -lfuse
+	LIBS = -lfuse -pthread
 endif
 ifeq ($(shell uname -s),Darwin)
-	CFLAGS = -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
+	CFLAGS += -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
 	LIBS = -losxfuse
 endif
 ifeq ($(shell uname -s),FreeBSD)
 	CFLAGS += -L$(FREEBSD_ROOT)/lib -I$(FREEBSD_ROOT)/include $(CFLAGS_EXTRA)
-	LIBS = -lfuse
+	LIBS = -lfuse -pthread
 endif
 
 all: $(TARGETS)
 
 tabfs: tabfs.c
-	cc $(CFLAGS) -o $@ $^ $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f $(TARGETS) *.o
@@ -34,3 +35,4 @@ clean:
 unmount:
 	killall -9 tabfs || true
 	diskutil unmount force mnt || true
+	fusermount -u mnt || true
