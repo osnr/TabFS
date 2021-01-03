@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <pthread.h>
 #include <fuse.h>
 
@@ -211,19 +212,28 @@ static struct fuse_operations tabfs_filesystem_operations = {
 };
 
 int main(int argc, char **argv) {
+    char* mountdir = getenv("TABFS_MOUNT_DIR");
+    if (mountdir == NULL) {
+        mountdir = malloc(sizeof(char)*4);
+        sprintf(mountdir, "mnt");
+    }
+
     char killcmd[1000];
     sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9", getpid());
     system(killcmd);
+
+    char unmountcmd[1000];
 #ifdef __APPLE__
-    system("diskutil umount force mnt > /dev/null");
+    sprintf(unmountcmd, "diskutil umount force %s > /dev/null", mountdir);
 #else
-    system("fusermount -u mnt");
+    sprintf(unmountcmd, "fusermount -u %s", mountdir);
 #endif
+    system(unmountcmd);
 
     l = fopen("log.txt", "w");
     for (int i = 0; i < argc; i++) {
         fprintf(l, "arg%d: [%s]\n", i, argv[i]); fflush(l);
     }
-    char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", "mnt"};
+    char* fuse_argv[] = {argv[0], "-odirect_io", "-s", "-f", mountdir};
     return fuse_main(5, fuse_argv, &tabfs_filesystem_operations, NULL);
 }
