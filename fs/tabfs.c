@@ -214,8 +214,7 @@ static struct fuse_operations tabfs_filesystem_operations = {
 int main(int argc, char **argv) {
     char* mountdir = getenv("TABFS_MOUNT_DIR");
     if (mountdir == NULL) {
-        mountdir = malloc(sizeof(char)*4);
-        sprintf(mountdir, "mnt");
+        mountdir = "mnt";
     }
 
     char killcmd[1000];
