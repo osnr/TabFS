@@ -1,3 +1,9 @@
+// This file should rarely need to be changed. (which is intentional,
+// because it is a pain to program here, it's a pain to recompile and
+// reload it, and it's a pain to debug it.)  Most of the behavior of
+// TabFS -- the definitions of the synthetic files -- lives on the
+// extension side, not here.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>

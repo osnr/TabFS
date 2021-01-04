@@ -63,8 +63,8 @@ for that tab</p>
 This gives you a _ton_ of power, because now you can apply [all the
 existing tools](https://twitter.com/rsnous/status/1018570020324962305)
 on your computer that already know how to deal with files -- terminal
-commands, scripting languages, graphical explorers, etc -- and use
-them to control and communicate with your browser.
+commands, scripting languages, point-and-click explorers, etc -- and
+use them to control and communicate with your browser.
 
 Now you don't need to [code up a browser extension from
 scratch](https://twitter.com/rsnous/status/1261392522485526528) every
