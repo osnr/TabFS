@@ -344,6 +344,24 @@ router["/tabs/by-id/*/control"] = {
   },
   async truncate({path, size}) { return {}; }
 };
+router["/tabs/by-id/*/active"] = {
+  // echo true > mnt/tabs/by-id/1644/active
+  // cat mnt/tabs/by-id/1644/active
+  async read({path, fh, offset, size}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    const tab = await browser.tabs.get(tabId);
+    const buf = (JSON.stringify(tab.active) + '\n').slice(offset, offset + size);
+    return { buf };
+  },
+  async write({path, buf}) {
+    if (buf.trim() === "true") {
+      const tabId = parseInt(pathComponent(path, -2));
+      await browser.tabs.update(tabId, { active: true });
+    }
+    return {size: stringToUtf8Array(buf).length};
+  },
+  async truncate({path, size}) { return {}; }
+};
 
 // debugger/ : debugger-API-dependent (Chrome-only)
 (function() {
@@ -632,7 +650,7 @@ async function onMessage(req) {
     // timeout is very useful because some operations just hang
     // (like trying to take a screenshot, until the tab is focused)
     didTimeout = true; console.error('timeout');
-    port.postMessage({ op: req.op, error: unix.ETIMEDOUT });
+    port.postMessage({ id: req.id, op: req.op, error: unix.ETIMEDOUT });
   }, 1000);
 
   /* console.time(req.op + ':' + req.path);*/
@@ -654,6 +672,7 @@ async function onMessage(req) {
     clearTimeout(timeout);
 
     console.log('resp', response);
+    response.id = req.id;
     port.postMessage(response);
   }
 };
