@@ -650,7 +650,7 @@ async function onMessage(req) {
     // timeout is very useful because some operations just hang
     // (like trying to take a screenshot, until the tab is focused)
     didTimeout = true; console.error('timeout');
-    port.postMessage({ op: req.op, error: unix.ETIMEDOUT });
+    port.postMessage({ id: req.id, op: req.op, error: unix.ETIMEDOUT });
   }, 1000);
 
   /* console.time(req.op + ':' + req.path);*/
@@ -672,6 +672,7 @@ async function onMessage(req) {
     clearTimeout(timeout);
 
     console.log('resp', response);
+    response.id = req.id;
     port.postMessage(response);
   }
 };
