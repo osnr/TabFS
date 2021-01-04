@@ -22,8 +22,7 @@ pre { white-space: pre-wrap; }
 mounts your browser tabs as a filesystem on your computer.
 
 Out of the box, it supports Chrome and (to a lesser extent[^firefox])
-Firefox, on macOS and Linux. ([see full
-list](https://github.com/osnr/TabFS/blob/master/install.sh))[^otherbrowsers]
+Firefox, on macOS and Linux.[^otherbrowsers]
 
 [^firefox]: because of the absence of the [chrome.debugger API for
     extensions](https://developer.chrome.com/docs/extensions/reference/debugger/).
@@ -32,12 +31,13 @@ list](https://github.com/osnr/TabFS/blob/master/install.sh))[^otherbrowsers]
     get that second level of functionality that is currently
     Chrome-only.
 
-[^otherbrowsers]: ... and Brave, Vivaldi, FreeBSD, etc. It could
-    probably be made to work on other browsers like
-    [Safari](https://github.com/osnr/TabFS/issues/6) that support the
-    WebExtensions API, and [on Windows using Dokan or WinFUSE/WSL
-    stuff (?)](https://github.com/osnr/TabFS/issues/13), but I haven't
-    looked into that yet.
+[^otherbrowsers]: plus some related browsers and platforms: it also
+    supports [Brave](https://github.com/osnr/TabFS/issues/30),
+    Vivaldi, FreeBSD, etc. It could probably be made to work on other
+    browsers like [Safari](https://github.com/osnr/TabFS/issues/6)
+    that support the WebExtensions API, and [on Windows using Dokan or
+    WinFUSE/WSL stuff (?)](https://github.com/osnr/TabFS/issues/13),
+    but I haven't looked into that yet.
 
 Each of your open tabs is mapped to a folder.
 
@@ -63,8 +63,8 @@ for that tab</p>
 This gives you a _ton_ of power, because now you can apply [all the
 existing tools](https://twitter.com/rsnous/status/1018570020324962305)
 on your computer that already know how to deal with files -- terminal
-commands, scripting languages, etc -- and use them to control and
-communicate with your browser.
+commands, scripting languages, graphical explorers, etc -- and use
+them to control and communicate with your browser.
 
 Now you don't need to [code up a browser extension from
 scratch](https://twitter.com/rsnous/status/1261392522485526528) every
@@ -177,7 +177,12 @@ The [`debugger/`
 subdirectory](https://github.com/osnr/TabFS/blob/fef9289e3a7f82cda6319d5f19d5a5f13f3cc44b/extension/background.js#L355)
 in each tab folder has synthetic files that let you access loaded
 resources (in `debugger/resources/`) and scripts (in
-`debugger/scripts/`). (this is experimental)
+`debugger/scripts/`).
+
+(this is experimental.)
+
+(TODO: edit the images in place? you can already kinda edit the
+scripts in place)
 
 ### Retrieve what's playing on YouTube Music: [youtube-music-tabfs](https://github.com/junhoyeo/youtube-music-tabfs)
 
@@ -217,6 +222,10 @@ that every time I want to reload my extension code.
 
 edit `page.html` in the tab folder. I guess it could just stomp
 outerHTML at first, eventually could do something more sophisticated
+
+then you can use your existing text editor! and you'll always know
+that if the file saved, then it's up to date in the browser. no flaky
+watcher that you're not sure if it's working
 
 (it would be cool to have a persistent storage story here
 also. I like the idea of being able to put arbitrary files anywhere in
@@ -276,6 +285,11 @@ and saving inside a tab's folder, that tab suddenly really
 want it to survive as long as a normal file would, unlike most browser
 tabs today)
 
+(the combination of these last 3 TODOs may be a very powerful, open,
+dynamic, flexible programming environment where you can bring whatever
+external tools you want to bear, everything is live in your browser,
+you never need to restart...)
+
 ## Setup
 
 **disclaimer**: this extension is an experiment. I think it's cool and
@@ -289,6 +303,15 @@ extension is to create a gigantic new surface area of communication
 between stuff inside your browser and software on the rest of your
 computer.
 
+(The installation process is pretty involved right now. I'd like to
+simplify it, but I also don't want a seamless installation process
+that does a bad job of managing people's expectations. And it's
+important to me that users [feel
+comfortable](https://twitter.com/rsnous/status/1345113873792126976)
+looking at [how TabFS works](#design) -- it's pretty much just two
+files! -- and that they can mess around with it; it shouldn't be a
+black box.)
+
 Before doing anything, clone [this repository](https://github.com/osnr/TabFS):
 
 ```
@@ -301,12 +324,9 @@ Then, install the C filesystem.
 
 ### 1. Install the browser extension
 
-(I think for Opera or whatever other Chromium-based browser, you could
-get it to work, but you'd need to change the native messaging path in
-install.sh. Not sure about Safari. maybe Edge too? if you also got
-everything to compile for Windows)
+#### in Chrome, Chromium, and related browsers
 
-#### in Chrome
+(including Brave and Vivaldi)
 
 Go to the [Chrome extensions page](chrome://extensions). Enable
 Developer mode (top-right corner).
@@ -350,7 +370,7 @@ $ make
 Now install the native messaging host into your browser, so the
 extension can launch and talk to the filesystem:
 
-#### Chrome and Chromium
+#### Chrome, Chromium, and related browsers
 
 Substitute the extension ID you copied earlier for
 `jimpolemfaeckpjijgapgkmolankohgj` in the command below.
@@ -359,11 +379,11 @@ Substitute the extension ID you copied earlier for
 $ ./install.sh chrome jimpolemfaeckpjijgapgkmolankohgj
 ```
 
-or
-
-```
-$ ./install.sh chromium jimpolemfaeckpjijgapgkmolankohgj
-```
+(For Chromium, say `chromium` instead of `chrome`. For Vivaldi, say
+`vivaldi` instead. For Brave, say `chrome`. You can look at the
+contents of
+[install.sh](https://github.com/osnr/TabFS/blob/master/install.sh) for
+the latest on browser and OS support.)
 
 #### Firefox
 
@@ -458,19 +478,15 @@ marshalling)
 
 TODO: make diagrams?
 
-## FIXME: Credits
-
-- etc
-- etc
-- etc 
-
 ## License
 
 GPLv3
 
 ## things that could/should be done
 
-(maybe you can do these?)
+(maybe you can do these? lots of people are [already pitching in on
+GitHub](https://github.com/osnr/TabFS); I wish it was easier for me to
+keep up listing them all here!)
 
 - [add more synthetic files!! (it's just
   JavaScript)](https://twitter.com/rsnous/status/1345113873792126976)
@@ -489,16 +505,19 @@ GPLv3
 - why can't Preview open images? GUI programs often struggle with the
   filesystem for some reason. CLI more reliable
 
-- multithreading. the key constraint is that I pass `-s` to
+- ~~multithreading. the key constraint is that I pass `-s` to
   `fuse_main` in `tabfs.c`, which makes everything
   single-threaded. but I'm not clear on how much it would improve
-  performance? maybe a lot, but not sure. maybe workload-dependent?
+  performance? maybe a lot, but not sure. maybe workload-dependent?~~
 
-    the extension itself (and the stdin/stdout comm between the fs and
-  the extension) would still be single-threaded, but you could
+    ~~the extension itself (and the stdin/stdout comm between the fs
+  and the extension) would still be single-threaded, but you could
   interleave requests since most of that stuff is async. like the
   screenshot request that takes like half a second, you could do other
-  stuff while waiting for the browser to get back to you on that (?)
+  stuff while waiting for the browser to get back to you on that (?)~~
+  *update: [we are
+  multithreaded](https://github.com/osnr/TabFS/pull/29) now, thanks to
+  [huglovefan](https://github.com/huglovefan)!*
 
     another issue is that _applications_ tend to hang if any
   individual request hangs anyway; they're not expecting the
@@ -513,12 +532,17 @@ GPLv3
   sure impact of these
 
 - TypeScript (how to do with the minimum amount of build system and
-  package manager nonsense?)
+  package manager nonsense?) (now realizing that if I had gone with
+  TypeScript, I would then have to ask people to install npm and
+  webpack and the TS compiler and whatever just to get this
+  running. really, really glad I didn't.) maybe we can just do dynamic
+  type checking at the fs op call boundaries?
 
-- look into support for Firefox / Windows / Safari / etc. best FUSE
-  equiv for Windows? can you bridge to the remote debugging APIs that
-  all of them already have to get the augmented functionality? or just
-  implement it all with JS monkey patching?
+- [look into support for Firefox / Windows / Safari /
+  etc.](https://github.com/osnr/TabFS/issues?q=is%3Aopen+is%3Aissue+label%3Aport)
+  best FUSE equiv for Windows? can you bridge to the remote debugging
+  APIs that all of them already have to get the augmented
+  functionality? or just implement it all with JS monkey patching?
 
 - window management. tab management where you can move tabs. 'merge
   all windows'. [history management](https://anildash.com/2021/01/03/keeping-tabs-on-your-abstractions/)
@@ -554,9 +578,9 @@ suggests making an extension is a whole Thing, a whole Project. like,
 why can't I just take a minute to ask my browser a question or tell it
 to automate something? lightness
 
-- ["files are a sort of approachable 'bridge' that everyone knows how
+- "files are a sort of approachable 'bridge' that everyone knows how
   to interact with" / files are like one of the first things you learn
-  if you know any programming language / "because of this fs thing any
+  if you know any programming language / ["because of this fs thing any
   beginner coding thing can make use of it now"](https://twitter.com/rsnous/status/1345490658836926464)
 
 - a lot of existing uses of these browser control APIs are in an
