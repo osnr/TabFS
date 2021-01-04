@@ -57,7 +57,7 @@ static void write_or_die(int fd, void *buf, size_t sz) {
 }
 
 // documented somewhere in https://developer.chrome.com/docs/apps/nativeMessaging/
-#define MAX_MESSAGE_SIZE (1024*1024)
+#define MAX_MESSAGE_SIZE (size_t)(1024*1024)
 
 static int do_exchange(unsigned int id,
                        char **datap, size_t *sizep,
@@ -65,16 +65,17 @@ static int do_exchange(unsigned int id,
     *datap = NULL;
     *sizep = 0;
 
-    char jsonbuf[MAX_MESSAGE_SIZE];
-    struct json_out out = JSON_OUT_BUF(jsonbuf, sizeof(jsonbuf));
+    char *jsonbuf = malloc(MAX_MESSAGE_SIZE);
+    struct json_out out = JSON_OUT_BUF(jsonbuf, MAX_MESSAGE_SIZE);
 
     va_list args;
     va_start(args, fmt);
      size_t request_size = (size_t)json_vprintf(&out, fmt, args);
     va_end(args);
-    if (request_size > sizeof(jsonbuf)) {
+    if (request_size > MAX_MESSAGE_SIZE) {
         eprintln("warning: request too big to send (%zu > %zu)",
-            request_size, sizeof(jsonbuf));
+            request_size, MAX_MESSAGE_SIZE);
+        free(jsonbuf);
         return -EMSGSIZE;
     }
 
@@ -86,6 +87,7 @@ static int do_exchange(unsigned int id,
     };
     if (-1 == pipe(mydata.msgpipe)) {
         perror("exchange: pipe");
+        free(jsonbuf);
         return -EIO;
     }
 
@@ -95,6 +97,8 @@ static int do_exchange(unsigned int id,
 
     write_or_die(STDOUT_FILENO, &size_4bytes, sizeof(size_4bytes));
     write_or_die(STDOUT_FILENO, jsonbuf, request_size);
+
+    free(jsonbuf); jsonbuf = NULL;
 
     waiters = realloc(waiters, (numwaiters+1)*sizeof(*waiters));
     waiters[numwaiters] = &mydata;
@@ -175,7 +179,7 @@ static int count_fmt_args(const char *s) {
 
 #define exchange_json(datap, sizep, keys_fmt, ...) \
     do { \
-        unsigned int id = pthread_self(); \
+        unsigned int id = (uintptr_t)pthread_self(); \
         int req_rv = do_exchange(id, datap, sizep, \
             "{id: %u, " keys_fmt "}", \
             id, ##__VA_ARGS__); \
@@ -464,7 +468,9 @@ int main(int argc, char **argv) {
     char *fuse_argv[] = {
         argv[0],
         "-f",
+#if !defined(__APPLE__)
         "-oauto_unmount",
+#endif
         "-odirect_io",
         "mnt",
         NULL,
