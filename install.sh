@@ -5,8 +5,9 @@ set -eux
 if [[ "$#" -lt 1 || (
           ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
               ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
+              ( "$1" == "vivaldi" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32 ) ) ) ]]; then
-    echo "Usage: $0 <chrome EXTENSION_ID | chromium EXTENSION_ID | firefox>"
+    echo "Usage: $0 <chrome EXTENSION_ID | chromium EXTENSION_ID | vivaldi EXTENSION_ID | firefox>"
     exit 2
 fi
     
@@ -28,6 +29,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/.config/chromium/NativeMessagingHosts";;
     "Linux chromium")
         MANIFEST_LOCATION="$HOME/.config/chromium/NativeMessagingHosts";;
+    "Linux vivaldi")
+        MANIFEST_LOCATION="$HOME/.config/vivaldi/NativeMessagingHosts";;
     "Darwin chrome")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts";;
     "Darwin chromium")
@@ -40,7 +43,7 @@ APP_NAME="com.rsnous.tabfs"
 EXE_PATH=$(pwd)/fs/tabfs
 
 case "$BROWSER" in
-    chrome | chromium)
+    chrome | chromium | vivaldi)
         EXTENSION_ID=$2
         MANIFEST=$(cat <<EOF
 {
