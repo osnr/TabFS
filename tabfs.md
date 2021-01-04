@@ -22,7 +22,8 @@ pre { white-space: pre-wrap; }
 mounts your browser tabs as a filesystem on your computer.
 
 Out of the box, it supports Chrome and (to a lesser extent[^firefox])
-Firefox, on macOS and Linux.[^otherbrowsers]
+Firefox, on macOS and Linux. ([see full
+list](https://github.com/osnr/TabFS/blob/master/install.sh))[^otherbrowsers]
 
 [^firefox]: because of the absence of the [chrome.debugger API for
     extensions](https://developer.chrome.com/docs/extensions/reference/debugger/).
@@ -31,10 +32,12 @@ Firefox, on macOS and Linux.[^otherbrowsers]
     get that second level of functionality that is currently
     Chrome-only.
 
-[^otherbrowsers]: It could probably be made to work on other browsers
-    like Safari and Opera that support the WebExtensions API, and on
-    Windows using Dokan or WinFUSE/WSL stuff (?), but I haven't looked
-    into that.
+[^otherbrowsers]: ... and Brave, Vivaldi, FreeBSD, etc. It could
+    probably be made to work on other browsers like
+    [Safari](https://github.com/osnr/TabFS/issues/6) that support the
+    WebExtensions API, and [on Windows using Dokan or WinFUSE/WSL
+    stuff (?)](https://github.com/osnr/TabFS/issues/13), but I haven't
+    looked into that yet.
 
 Each of your open tabs is mapped to a folder.
 
@@ -316,7 +319,9 @@ Load-unpacked the `extension/` folder in this repo.
 #### in Firefox
 
 You'll need to install as a "temporary extension", so it'll only last
-in your current FF session. (TODO: is this fixable? signature stuff?)
+in your current FF session. (If you want to install permanently, see
+[this
+issue](https://github.com/osnr/TabFS/issues/4#issuecomment-753447380).)
 
 Go to [about:debugging#/runtime/this-firefox](about:debugging#/runtime/this-firefox).
 
@@ -453,6 +458,12 @@ marshalling)
 
 TODO: make diagrams?
 
+## FIXME: Credits
+
+- etc
+- etc
+- etc 
+
 ## License
 
 GPLv3
@@ -510,7 +521,7 @@ GPLv3
   implement it all with JS monkey patching?
 
 - window management. tab management where you can move tabs. 'merge
-  all windows'
+  all windows'. [history management](https://anildash.com/2021/01/03/keeping-tabs-on-your-abstractions/)
 
 ## hmm
 
