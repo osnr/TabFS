@@ -15,8 +15,8 @@ ifeq ($(shell uname -s),Linux)
 	LIBS = -lfuse -pthread
 endif
 ifeq ($(shell uname -s),Darwin)
-	CFLAGS += -I$(OSXFUSE_ROOT)/include/osxfuse/fuse -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
-	LIBS = -losxfuse
+	CFLAGS += -I$(OSXFUSE_ROOT)/include -L$(OSXFUSE_ROOT)/lib -D_DARWIN_USE_64_BIT_INODE $(CFLAGS_EXTRA)
+	LIBS = -lfuse
 endif
 ifeq ($(shell uname -s),FreeBSD)
 	CFLAGS += -L$(FREEBSD_ROOT)/lib -I$(FREEBSD_ROOT)/include $(CFLAGS_EXTRA)

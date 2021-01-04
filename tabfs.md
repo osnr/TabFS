@@ -352,10 +352,10 @@ Choose manifest.json in the extension subfolder of this repo.
 ### 2. Install the C filesystem
 
 First, make sure you have FUSE and FUSE headers. On Linux, for example,
-`sudo apt install libfuse-dev` or equivalent. On macOS, get [FUSE for
-macOS](https://osxfuse.github.io/). (on macOS, also check [this
-bug](https://github.com/osnr/TabFS/issues/11) -- TODO work out the
-best path to explain here.)
+`sudo apt install libfuse-dev` or equivalent. On macOS, get
+[macFUSE](https://osxfuse.github.io/). (on macOS, also see [this
+-bug](https://github.com/osnr/TabFS/issues/11) -- TODO work out the
+best path to explain here)
 
 Then compile the C filesystem:
 
