@@ -445,6 +445,9 @@ static const struct fuse_operations tabfs_oper = {
 
 int main(int argc, char **argv) {
     (void)argc;
+    if (NULL == getenv("TABFS_MOUNT_DIR")) {
+        setenv("TABFS_MOUNT_DIR", "mnt", 1);
+    }
 
     freopen("log.txt", "a", stderr);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -454,14 +457,14 @@ int main(int argc, char **argv) {
     system(killcmd);
 
 #if defined(__APPLE__)
-    system("diskutil umount force mnt >/dev/null");
+    system("diskutil umount force \"$TABFS_MOUNT_DIR\" >/dev/null");
 #elif defined(__FreeBSD__)
-    system("umount -f mnt 2>/dev/null");
+    system("umount -f \"$TABFS_MOUNT_DIR\" 2>/dev/null");
 #else
-    system("fusermount -u mnt 2>/dev/null");
+    system("fusermount -u \"$TABFS_MOUNT_DIR\" 2>/dev/null");
 #endif
 
-    mkdir("mnt", 0755);
+    system("mkdir -p \"$TABFS_MOUNT_DIR\"");
 
     pthread_t thread;
     int err = pthread_create(&thread, NULL, reader_main, NULL);
@@ -469,6 +472,7 @@ int main(int argc, char **argv) {
         eprintln("pthread_create: %s", strerror(err));
         exit(1);
     }
+
     pthread_detach(thread);
 
     char *fuse_argv[] = {
@@ -478,7 +482,7 @@ int main(int argc, char **argv) {
         "-oauto_unmount",
 #endif
         "-odirect_io",
-        "mnt",
+        getenv("TABFS_MOUNT_DIR"),
         NULL,
     };
     return fuse_main(
