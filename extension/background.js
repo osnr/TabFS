@@ -19,6 +19,9 @@ const unix = {
   S_IFREG: 0100000, // regular
   S_IFLNK: 0120000, // symbolic link
   S_IFSOCK: 0140000, // socket
+
+  // Open flags
+  O_TRUNC: 01000,
 }
 
 class UnixError extends Error {
@@ -110,6 +113,7 @@ const Cache = {
     return handle;
   },
   getObjectForHandle(handle) { return this.store[handle]; },
+  setObjectForHandle(handle, object) { this.store[handle] = object; },
   removeObjectForHandle(handle) { delete this.store[handle]; }
 };
 function toUtf8Array(stringOrArray) {
@@ -141,7 +145,10 @@ const defineFile = (getData, setData) => ({
 
   // We call getData() once when the file is opened, then cache that
   // data for all subsequent reads from that application.
-  async open({path}) { return { fh: Cache.storeObject(toUtf8Array(await getData(path))) }; },
+  async open({path, flags}) {
+    const data = !(flags & unix.O_TRUNC) ? await getData(path) : "";
+    return { fh: Cache.storeObject(toUtf8Array(data)) };
+  },
   async read({path, fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
   },
@@ -150,9 +157,11 @@ const defineFile = (getData, setData) => ({
     const bufarr = stringToUtf8Array(buf);
     if (offset + bufarr.length > arr.length) {
       const newArr = new Uint8Array(offset + bufarr.length);
-      newArr.set(arr); arr = newArr;
+      newArr.set(arr.slice(0, Math.min(offset, arr.length)));
+      arr = newArr;
+      Cache.setObjectForHandle(fh, arr);
     }
-    for (let i = 0; i < bufarr.length; i++) { arr[offset + i] = bufarr[i]; }
+    arr.set(bufarr, offset);
     // I guess caller should override write() if they want to actually
     // patch and not just re-set the whole string (for example,
     // if they want to hot-reload just one function the user modified)
@@ -165,11 +174,12 @@ const defineFile = (getData, setData) => ({
     // (but `echo hi > foo.txt`, the main thing I care about, uses
     // O_TRUNC which thankfully doesn't do that)
     let arr = toUtf8Array(await getData(path));
-    if (size > arr.length) {
+    if (size !== arr.length) {
       const newArr = new Uint8Array(size);
-      newArr.set(arr); arr = newArr;
+      newArr.set(arr.slice(0, Math.min(size, arr.length)));
+      arr = newArr;
     }
-    await setData(path, utf8ArrayToString(arr.slice(0, size))); return {};
+    await setData(path, utf8ArrayToString(arr)); return {};
   }
 });
 

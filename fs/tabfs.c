@@ -423,6 +423,20 @@ static int tabfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
     return 0;
 }
 
+#define want_capability(conn, flag) \
+    do { \
+        if (conn->capable & flag) { \
+            conn->want |= flag; \
+        } else { \
+            eprintln("warning: " #flag " not supported"); \
+        } \
+    } while (0)
+
+static void *tabfs_init(struct fuse_conn_info *conn) {
+    want_capability(conn, FUSE_CAP_ATOMIC_O_TRUNC);
+    return NULL;
+}
+
 static const struct fuse_operations tabfs_oper = {
     .getattr  = tabfs_getattr,
     .readlink = tabfs_readlink,
@@ -441,6 +455,8 @@ static const struct fuse_operations tabfs_oper = {
 
     .mkdir  = tabfs_mkdir,
     .create = tabfs_create,
+
+    .init = tabfs_init,
 };
 
 int main(int argc, char **argv) {
