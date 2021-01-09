@@ -8,7 +8,7 @@ if [[ "$#" -lt 1 || (
               ( "$1" == "vivaldi" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromebeta" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32 ) ) ) ]]; then
-    echo "Usage: $0 <chrome EXTENSION_ID | chromebeta EXTENSION_ID | chromium EXTENSION_ID | vivalidi EXTENSION_ID | firefox>"
+    echo "Usage: $0 <chrome EXTENSION_ID | chromebeta EXTENSION_ID | chromium EXTENSION_ID | vivaldi EXTENSION_ID | firefox>"
     exit 2
 fi
     
