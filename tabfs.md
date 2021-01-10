@@ -24,6 +24,10 @@ mounts your browser tabs as a filesystem on your computer.
 Out of the box, it supports Chrome and (to a lesser extent[^firefox])
 Firefox, on macOS and Linux.[^otherbrowsers]
 
+(**update**: You can now **[sponsor further development of
+TabFS](https://github.com/sponsors/osnr)** and help to turn it from an
+experiment into something really reliable and useful!)
+
 [^firefox]: because of the absence of the [chrome.debugger API for
     extensions](https://developer.chrome.com/docs/extensions/reference/debugger/).
     With a bit more plumbing, you could maybe find a way to connect it
@@ -169,7 +173,7 @@ $ echo 'document.body.style.background = "green"' > mnt/tabs/last-focused/execut
 $ echo 'alert("hi!")' > mnt/tabs/last-focused/execute-script
 ```
 
-### Get images / scripts / etc on page
+### Get images / scripts / other resource files from page
 
 (TODO: [document better](https://github.com/osnr/TabFS/issues/5), put in screenshots)
 
@@ -177,9 +181,10 @@ The [`debugger/`
 subdirectory](https://github.com/osnr/TabFS/blob/fef9289e3a7f82cda6319d5f19d5a5f13f3cc44b/extension/background.js#L355)
 in each tab folder has synthetic files that let you access loaded
 resources (in `debugger/resources/`) and scripts (in
-`debugger/scripts/`).
+`debugger/scripts/`). 
 
-(this is experimental.)
+Images will show up as actual PNG or JPEG files, scripts as actual JS
+files, and so on. (this is experimental.)
 
 (TODO: edit the images in place? you can already kinda edit the
 scripts in place)

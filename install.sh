@@ -2,6 +2,7 @@
 
 set -eux
 
+# (Brave uses same path as Chrome, so for Brave, say `chrome`)
 if [[ "$#" -lt 1 || (
           ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
               ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
