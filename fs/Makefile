@@ -36,3 +36,4 @@ unmount:
 	killall -9 tabfs || true
 	diskutil unmount force mnt || true
 	fusermount -u mnt || true
+	umount -f mnt || true

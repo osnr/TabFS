@@ -479,7 +479,9 @@ int main(int argc, char **argv) {
         argv[0],
         "-f",
 #if !defined(__APPLE__)
+#if !defined(__FreeBSD__)
         "-oauto_unmount",
+#endif
 #endif
         "-odirect_io",
         getenv("TABFS_MOUNT_DIR"),
