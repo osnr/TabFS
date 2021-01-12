@@ -487,6 +487,13 @@ TODO: make diagrams?
 
 GPLv3
 
+## Sponsors
+
+Thanks to [all the project sponsors](https://github.com/sponsors/osnr). Special
+thanks to:
+
+<a href="https://oss.capital/"><img style="max-width: 50%" src="oss-capital.png"></a>
+
 ## things that could/should be done
 
 (maybe you can do these? lots of people are [already pitching in on
