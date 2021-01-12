@@ -275,7 +275,7 @@ static int tabfs_read(const char *path,
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, size: %d, offset: %d, fh: %llu, flags: %d",
+        "op: %Q, path: %Q, size: %d, offset: %lld, fh: %llu, flags: %d",
         "read", path, size, offset, fi->fh, fi->flags);
 
     char *scan_buf; int scan_len;
@@ -298,7 +298,7 @@ static int tabfs_write(const char *path,
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, buf: %V, offset: %d, fh: %llu, flags: %d",
+        "op: %Q, path: %Q, buf: %V, offset: %lld, fh: %llu, flags: %d",
         "write", path, data, size, offset, fi->fh, fi->flags);
 
     int ret;
@@ -345,7 +345,7 @@ static int tabfs_readdir(const char *path,
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, offset: %d",
+        "op: %Q, path: %Q, offset: %lld",
         "readdir", path, offset);
 
     struct json_token t;
