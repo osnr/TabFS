@@ -13,7 +13,7 @@ int file_contents_equal(char* path, char* contents) {
     // hehe: https://twitter.com/ianh_/status/1340450349065244675
     setenv("path", path, 1);
     setenv("contents", contents, 1);
-    return system("[ \"$contents\" == \"$(cat \"$path\")\" ]") == 0;
+    return system("bash -c '[ \"$contents\" == \"$(cat \"$path\")\" ]'") == 0;
 }
 
 char* expand(char* phrase) { // expand path with wildcard
