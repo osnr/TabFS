@@ -261,7 +261,7 @@ static int tabfs_open(const char *path, struct fuse_file_info *fi) {
         "open", path, fi->flags);
 
     parse_and_free_response(data, size,
-        "fh: %d",
+        "fh: %llu",
         &fi->fh);
 
     return 0;
@@ -275,7 +275,7 @@ static int tabfs_read(const char *path,
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, size: %d, offset: %d, fh: %d, flags: %d",
+        "op: %Q, path: %Q, size: %d, offset: %d, fh: %llu, flags: %d",
         "read", path, size, offset, fi->fh, fi->flags);
 
     char *scan_buf; int scan_len;
@@ -298,7 +298,7 @@ static int tabfs_write(const char *path,
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, buf: %V, offset: %d, fh: %d, flags: %d",
+        "op: %Q, path: %Q, buf: %V, offset: %d, fh: %llu, flags: %d",
         "write", path, data, size, offset, fi->fh, fi->flags);
 
     int ret;
@@ -313,7 +313,7 @@ static int tabfs_release(const char *path, struct fuse_file_info *fi) {
     char *data;
     size_t size;
     exchange_json(&data, &size,
-        "op: %Q, path: %Q, fh: %d",
+        "op: %Q, path: %Q, fh: %llu",
         "release", path, fi->fh);
 
     parse_and_free_response(data, size, "");
@@ -329,7 +329,7 @@ static int tabfs_opendir(const char *path, struct fuse_file_info *fi) {
         "opendir", path, fi->flags);
 
     parse_and_free_response(rdata, rsize,
-        "fh: %d",
+        "fh: %llu",
         &fi->fh);
 
     return 0;
@@ -365,7 +365,7 @@ static int tabfs_releasedir(const char *path, struct fuse_file_info *fi) {
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, fh: %d",
+        "op: %Q, path: %Q, fh: %llu",
         "releasedir", path, fi->fh);
 
     parse_and_free_response(rdata, rsize, "");
