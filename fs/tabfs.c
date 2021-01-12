@@ -377,7 +377,7 @@ static int tabfs_truncate(const char *path, off_t size) {
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
-        "op: %Q, path: %Q, size: %d",
+        "op: %Q, path: %Q, size: %lld",
         "truncate", path, size);
 
     parse_and_free_response(rdata, rsize, "");
