@@ -13,7 +13,7 @@ int file_contents_equal(char* path, char* contents) {
     // hehe: https://twitter.com/ianh_/status/1340450349065244675
     setenv("path", path, 1);
     setenv("contents", contents, 1);
-    return system("[ \"$contents\" == \"$(cat \"$path\")\" ]") == 0;
+    return system("bash -c '[ \"$contents\" == \"$(cat \"$path\")\" ]'") == 0;
 }
 
 char* expand(char* phrase) { // expand path with wildcard
@@ -77,7 +77,11 @@ int main() {
             assert(strcmp(hi, "hi") == 0);
             fclose(console);
         }
-        
+
+        // try to shorten the URL (#40)
+        assert(system("echo about:blank > ../fs/mnt/tabs/last-focused/url.txt") == 0);
+        assert(file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank"));
+
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
