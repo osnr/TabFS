@@ -79,9 +79,25 @@ int main() {
         }
 
         // try to shorten the URL (#40)
-        assert(system("echo about:blank > ../fs/mnt/tabs/last-focused/url.txt") == 0);
-        assert(file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank"));
+        /* assert(system("echo about:blank > ../fs/mnt/tabs/last-focused/url.txt") == 0); */
+        /* assert(file_contents_equal("../fs/mnt/tabs/last-focused/url.txt", "about:blank")); */
 
+        assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
+    }
+
+    {
+        assert(system("echo file://$(pwd)/test-textarea.html > ../fs/mnt/tabs/create") == 0);
+        {
+            FILE* console = fopen("../fs/mnt/tabs/last-focused/console", "r");
+            assert(system("echo \"console.log(document.getElementById('ta').value)\" > ../fs/mnt/tabs/last-focused/execute-script") == 0);
+
+            char ta[100] = {0}; fread(ta, 1, sizeof(ta), console);
+            assert(strcmp(ta, "initial text") == 0);
+
+            assert(file_contents_equal("../fs/mnt/tabs/last-focused/textareas/ta.txt", ta));
+
+            fclose(console);
+        }
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
