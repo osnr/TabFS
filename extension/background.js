@@ -449,6 +449,26 @@ router["/tabs/by-id/*/active"] = {
   });
 })();
 
+router["/tabs/by-id/*/textareas"] = {
+  async readdir({path}) {
+    const tabId = parseInt(pathComponent(path, -2));
+    // TODO: assign new IDs to textareas without them?
+    const code = `Array.from(document.querySelectorAll('textarea')).map(e => e.id).filter(id => id)`
+    const ids = (await browser.tabs.executeScript(tabId, {code}))[0];
+    return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
+  }
+};
+router["/tabs/by-id/*/textareas/*"] = defineFile(async path => {
+  const [tabId, textareaId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+  const code = `document.getElementById('${textareaId}').value`;
+  const textareaValue = (await browser.tabs.executeScript(tabId, {code}))[0];
+  return textareaValue;
+}, async (path, buf) => {
+  const [tabId, textareaId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+  const code = `document.getElementById('${textareaId}').value = unescape('${escape(buf)}')`;
+  await browser.tabs.executeScript(tabId, {code});
+});
+
 router["/tabs/by-title"] = {
   getattr() {
     return {
