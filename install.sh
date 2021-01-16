@@ -5,6 +5,7 @@ set -eux
 # (Brave uses same path as Chrome, so for Brave, say `chrome`)
 if [[ "$#" -lt 1 || (
           ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
+              ( "$1" == "brave" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "vivaldi" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromebeta" && "$#" -eq 2 && ${#2} -eq 32 ) ||
@@ -12,7 +13,7 @@ if [[ "$#" -lt 1 || (
     echo "Usage: $0 <chrome EXTENSION_ID | chromebeta EXTENSION_ID | chromium EXTENSION_ID | vivaldi EXTENSION_ID | firefox>"
     exit 2
 fi
-    
+
 OS="$(uname -s)"
 BROWSER="$(echo $1 | tr '[:upper:]' '[:lower:]')"
 
@@ -25,6 +26,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/.mozilla/native-messaging-hosts";;
     "Darwin firefox")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Mozilla/NativeMessagingHosts";;
+    "Linux brave")
+        MANIFEST_LOCATION="$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts";;
     "Linux chrome")
         MANIFEST_LOCATION="$HOME/.config/google-chrome/NativeMessagingHosts";;
     "FreeBSD chromium")
@@ -47,7 +50,7 @@ APP_NAME="com.rsnous.tabfs"
 EXE_PATH=$(pwd)/fs/tabfs
 
 case "$BROWSER" in
-    chrome | chromium | chromebeta | vivaldi)
+    brave | chrome | chromium | chromebeta | vivaldi)
         EXTENSION_ID=$2
         MANIFEST=$(cat <<EOF
 {
