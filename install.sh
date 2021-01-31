@@ -42,6 +42,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/Library/Application Support/Google/Chrome Beta/NativeMessagingHosts";;
     "Darwin chromium")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Chromium/NativeMessagingHosts";;
+    "Darwin vivaldi")
+        MANIFEST_LOCATION="$HOME/Library/Application Support/Vivaldi/NativeMessagingHosts";;
 esac
 
 mkdir -p "$MANIFEST_LOCATION"
