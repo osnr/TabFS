@@ -673,6 +673,10 @@ function findRoute(path) {
 
 let port;
 async function onMessage(req) {
+  // Safari / Safari extension app API forces you to adopt their
+  // {name, userInfo} structure for the request.
+  if (req.name === 'ToSafari') req = req.userInfo;
+
   if (req.buf) req.buf = atob(req.buf);
   console.log('req', req);
 
@@ -712,6 +716,16 @@ function tryConnect() {
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {console.log('disconnect', p)});
+
+  // Safari is very weird -- it has this native app that we have to talk to,
+  // so we poke that app to wake it up, get it to start the TabFS process,
+  // and get it to start calling us whenever TabFS wants to do an FS call.
+  // Is there a better way to do this?
+  if (chrome.runtime.getURL('/').startsWith('safari-web-extension://')) { // Safari-only
+    chrome.runtime.sendNativeMessage('com.rsnous.tabfs', {op: 'safari_did_connect'}, function(resp) {
+      console.log(resp);
+    });
+  }
 }
 
 if (!TESTING) {
