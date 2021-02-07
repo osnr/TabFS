@@ -8,6 +8,7 @@
 import Foundation
 
 import SafariServices.SFSafariApplication
+import os.log
 
 let extensionBundleIdentifier = "com.rsnous.TabFS-Extension"
 
@@ -24,6 +25,9 @@ class FSProcessManager {
     func start() {
         fs = Process()
         fs.executableURL = URL(fileURLWithPath: "/Users/osnr/Code/tabfs/fs/tabfs")
+        
+        os_log(.default, "url: %{public}@", fs.executableURL as! NSURL)
+        
         fs.arguments = []
         
         let inputPipe = Pipe(), outputPipe = Pipe()
@@ -34,7 +38,7 @@ class FSProcessManager {
         
         fsInput = inputPipe.fileHandleForWriting
         fsOutput = outputPipe.fileHandleForReading
-//        
+//
 //        SFSafariApplication.dispatchMessage(
 //            withName: "ToSafari",
 //            toExtensionWithIdentifier: extensionBundleIdentifier,

@@ -713,19 +713,24 @@ async function onMessage(req) {
 };
 
 function tryConnect() {
+  console.log('start tryConnect');
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
+  console.log('start tryConnect - did connectNative');
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {console.log('disconnect', p)});
 
+  console.log('tryConnect - about to sNM');
   // Safari is very weird -- it has this native app that we have to talk to,
   // so we poke that app to wake it up, get it to start the TabFS process,
   // and get it to start calling us whenever TabFS wants to do an FS call.
   // Is there a better way to do this?
   if (chrome.runtime.getURL('/').startsWith('safari-web-extension://')) { // Safari-only
     chrome.runtime.sendNativeMessage('com.rsnous.tabfs', {op: 'safari_did_connect'}, function(resp) {
+      console.log('didConnect resp');
       console.log(resp);
     });
   }
+  console.log('tryConnect - did sNM');
 }
 
 if (!TESTING) {

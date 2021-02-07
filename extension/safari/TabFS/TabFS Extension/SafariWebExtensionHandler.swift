@@ -20,10 +20,10 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         
         if message["op"] as! String == "safari_did_connect" {
             FSProcessManager.shared.start()
-            
-            let response = NSExtensionItem()
-            response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
-            context.completeRequest(returningItems: [response], completionHandler: nil)
+//
+//            let response = NSExtensionItem()
+//            response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
+//            context.completeRequest(returningItems: [response], completionHandler: nil)
             
             return
         }
