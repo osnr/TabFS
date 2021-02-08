@@ -20,3 +20,12 @@ sites. It should be running now! (?)
 
 Check the `fs/mnt` folder of the TabFS repo on your computer to see if
 it's mounted.
+
+### tips
+
+- To open Web inspector: Safari -> Develop menu -> Web Extension
+  Background Pages -> TabFS
+
+- You need to rebuild if you change background.js. This is pretty
+  annoying.
+

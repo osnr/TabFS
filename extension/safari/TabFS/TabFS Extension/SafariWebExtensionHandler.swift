@@ -16,7 +16,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         guard let message = item.userInfo?["message"] as? [AnyHashable: Any] else { return }
 
         guard message["op"] as! String == "safari_did_connect" else { return }
-        
+
         // The XPC service is a subprocess that lives outside the macOS App Sandbox.
         // (Safari extension native code, including this file, has to live in the sandbox.)
         // It can do forbidden things like spawn tabfs filesystem and set up WebSocket server.
