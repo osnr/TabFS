@@ -47,8 +47,4 @@ class ViewController: NSViewController {
             }
         }
     }
-
-    @IBAction func startTabFSAndConnect(_ sender: Any) {
-//        FSProcessManager.start()
-    }
 }
