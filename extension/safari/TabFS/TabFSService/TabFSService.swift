@@ -67,7 +67,7 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                 let context = NWConnection.ContentContext(identifier: "context", metadata: [metaData])
                 conn.send(content: req, contentContext: context, completion: .contentProcessed({ err in
                     if err != nil {
-                        os_log(.default, "req %{public}@ error: %{public}@", String(data: req, encoding: .utf8) as! CVarArg, err!.debugDescription as CVarArg)
+                        os_log(.default, "req %{public}@ error: %{public}@", String(data: req, encoding: .utf8)!, err!.debugDescription as CVarArg)
                         // FIXME: ERROR
                     }
                 }))
@@ -81,6 +81,7 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                         return
                     }
                     
+                    // Send the response back to tabfs.c.
                     self.fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
                     self.fsInput.write(resp)
                     read()
@@ -89,15 +90,14 @@ class TabFSService: NSObject, TabFSServiceProtocol {
             read()
         }
         
-        // split new thread
         DispatchQueue.global(qos: .default).async {
             while true {
-                // read from them
+                // Blocking read from the tabfs process.
                 let length = self.fsOutput.readData(ofLength: 4).withUnsafeBytes { $0.load(as: UInt32.self) }
                 let req = self.fsOutput.readData(ofLength: Int(length))
                 
-                // send to other side of WEBSOCKET
                 if let handleRequest = handleRequest {
+                    // Send the request over the WebSocket connection to background.js in browser.
                     handleRequest(req)
                 } else {
                     // FIXME: ERROR
@@ -107,9 +107,9 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         // FIXME: disable auto termination
     }
     
-    func upperCaseString(_ string: String, withReply reply: @escaping (String) -> Void) {
-        let response = string.uppercased()
-        reply(response)
+    func start(withReply reply: @escaping () -> Void) {
+        // This XPC call is enough to just force the XPC service to be started.
+        reply()
     }
 }
 

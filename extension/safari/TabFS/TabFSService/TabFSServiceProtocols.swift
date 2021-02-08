@@ -8,5 +8,5 @@
 import Foundation
 
 @objc public protocol TabFSServiceProtocol {
-    func upperCaseString(_ string: String, withReply reply: @escaping (String) -> Void)
+    func start(withReply reply: @escaping () -> Void)
 }
