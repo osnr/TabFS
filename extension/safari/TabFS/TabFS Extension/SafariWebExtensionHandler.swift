@@ -6,47 +6,7 @@
 //
 
 import SafariServices
-import SafariServices.SFSafariApplication
 import os.log
-
-class TabFSServiceManager: TabFSServiceConsumerProtocol {
-    static let shared = TabFSServiceManager()
-    
-    var service: TabFSServiceProtocol!
-    
-    func connect() {
-        let connection = NSXPCConnection(serviceName: "com.rsnous.TabFSService")
-        
-        connection.remoteObjectInterface = NSXPCInterface(with: TabFSServiceProtocol.self)
-        
-        connection.exportedInterface = NSXPCInterface(with: TabFSServiceConsumerProtocol.self)
-        connection.exportedObject = self
-        
-        connection.resume()
-        
-        service = connection.remoteObjectProxyWithErrorHandler { error in
-            os_log(.default, "Received error:  %{public}@", error as! CVarArg)
-        } as? TabFSServiceProtocol
-        
-        service?.upperCaseString("hello XPC") { response in
-            os_log(.default, "Response from XPC service:  %{public}@", response)
-        }
-    }
-    
-    func request(_ req: Data) {
-        SFSafariApplication.dispatchMessage(
-            withName: "ToSafari",
-            toExtensionWithIdentifier: "com.rsnous.TabFS-Extension",
-            userInfo: try! JSONSerialization.jsonObject(with: req, options: []) as! [String : Any]
-        ) { error in
-            debugPrint("Message attempted. Error info: \(String.init(describing: error))")
-        }
-    }
-    
-    func response(_ resp: [AnyHashable: Any]) {
-        try! service.response(JSONSerialization.data(withJSONObject: resp, options: []))
-    }
-}
 
 class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     
@@ -60,27 +20,35 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         guard let message = item.userInfo?["message"] as? [AnyHashable: Any] else { return }
         
         if message["op"] as! String == "safari_did_connect" {
-            
             os_log(.default, "TabFSmsg sdc")
-            TabFSServiceManager.shared.connect()
-//
-//            let response = NSExtensionItem()
-//            response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
-//            context.completeRequest(returningItems: [response], completionHandler: nil)
+            
+            // The XPC service is a subprocess that lives outside the macOS App Sandbox.
+            // It can do forbidden things like spawn tabfs filesystem and set up WebSocket server.
+            
+            let connection = NSXPCConnection(serviceName: "com.rsnous.TabFSService")
+            
+            connection.remoteObjectInterface = NSXPCInterface(with: TabFSServiceProtocol.self)
+            
+            connection.resume()
+            
+            let service = connection.remoteObjectProxyWithErrorHandler { error in
+                os_log(.default, "Received error:  %{public}@", error as! CVarArg)
+            } as? TabFSServiceProtocol
+            
+            // need this one XPC call to actually initialize the service
+            service?.upperCaseString("hello XPC") { response in
+                os_log(.default, "Response from XPC service:  %{public}@", response)
+            }
+            
+            // FIXME: report port back?
+            let response = NSExtensionItem()
+            response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
+            context.completeRequest(returningItems: [response]) { (what) in
+                print(what)
+            }
             
             return
         }
-        
-        TabFSServiceManager.shared.response(message)
-//
-//        os_log(.default, "Received message from browser.runtime.sendNativeMessage: %@", op as! CVarArg)
-        
-//        let response = NSExtensionItem()
-//        response.userInfo = [ "message": [ "Response to": op ] ]
-//
-//        // How do I get too the app????
-//
-//        context.completeRequest(returningItems: [response], completionHandler: nil)
     }
     
 }

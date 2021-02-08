@@ -6,16 +6,14 @@
 //
 
 import Foundation
+import Network
 import os.log
 
 class TabFSService: NSObject, TabFSServiceProtocol {
     var fs: Process!
     var fsInput: FileHandle!
     var fsOutput: FileHandle!
-    
-    init(app: TabFSServiceConsumerProtocol) {
-        super.init()
-        
+    func startFs() {
         fs = Process()
         fs.executableURL = URL(fileURLWithPath: "/Users/osnr/Code/tabfs/fs/tabfs")
         fs.currentDirectoryURL = fs.executableURL?.deletingLastPathComponent()
@@ -32,6 +30,52 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         os_log(.default, "TabFSmsg tfs service: willrun")
         try! fs.run()
         os_log(.default, "TabFSmsg tfs service: ran")
+    }
+    
+    var ws: NWListener!
+    func startWs() {
+        // websocket server
+        let port = NWEndpoint.Port(rawValue: 9991)!
+        let parameters = NWParameters(tls: nil)
+        parameters.allowLocalEndpointReuse = true
+        parameters.includePeerToPeer = true
+        let opts = NWProtocolWebSocket.Options()
+        opts.autoReplyPing = true
+        parameters.defaultProtocolStack.applicationProtocols.insert(opts, at: 0)
+        
+        ws = try! NWListener(using: parameters, on: port)
+        ws.start(queue: .main)
+    }
+    
+    override init() {
+        super.init()
+        
+        startFs()
+        startWs()
+        
+        var handleRequest: ((_ req: Data) -> Void)?
+        ws.newConnectionHandler = { conn in
+            conn.start(queue: .main)
+            handleRequest = { req in
+                conn.send(content: req, completion: .contentProcessed({ err in
+                    if err != nil {
+                        // FIXME: ERROR
+                    }
+                }))
+            }
+            
+            func read() {
+                conn.receiveMessage { (resp, context, isComplete, err) in
+                    guard let resp = resp else {
+                        // FIXME err
+                        return
+                    }
+                    self.fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
+                    self.fsInput.write(resp)
+                    read()
+                }
+            }
+        }
         
         // split new thread
         DispatchQueue.global(qos: .default).async {
@@ -40,11 +84,15 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                 let length = self.fsOutput.readData(ofLength: 4).withUnsafeBytes { $0.load(as: UInt32.self) }
                 os_log(.default, "TabFSmsg tfs service: read %{public}d", length)
                 let req = self.fsOutput.readData(ofLength: Int(length))
-                // send to other side of XPC conn
-                app.request(req)
+                
+                // send to other side of WEBSOCKET
+                if let handleRequest = handleRequest {
+                    handleRequest(req)
+                } else {
+                    // FIXME: ERROR
+                }
             }
         }
-        
         // FIXME: disable auto termination
     }
     
@@ -52,22 +100,18 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         let response = string.uppercased()
         reply(response)
     }
-    
-    func response(_ resp: Data) {
-        fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
-        fsInput.write(resp)
-    }
+//
+//    func response(_ resp: Data) {
+//        fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
+//        fsInput.write(resp)
+//    }
 }
 
 class TabFSServiceDelegate: NSObject, NSXPCListenerDelegate {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-        
-        
         os_log(.default, "TabFSmsg tfs service: starting delegate")
         
-        newConnection.remoteObjectInterface = NSXPCInterface(with: TabFSServiceConsumerProtocol.self)
-        
-        let exportedObject = TabFSService(app: newConnection.remoteObjectProxy as! TabFSServiceConsumerProtocol)
+        let exportedObject = TabFSService()
         newConnection.exportedInterface = NSXPCInterface(with: TabFSServiceProtocol.self)
         newConnection.exportedObject = exportedObject
         

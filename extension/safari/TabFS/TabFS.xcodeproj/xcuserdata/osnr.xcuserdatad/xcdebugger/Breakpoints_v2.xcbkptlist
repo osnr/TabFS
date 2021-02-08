@@ -14,8 +14,8 @@
             filePath = "TabFS Extension/SafariWebExtensionHandler.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "57"
-            endingLineNumber = "57"
+            startingLineNumber = "17"
+            endingLineNumber = "17"
             landmarkName = "beginRequest(with:)"
             landmarkType = "7">
          </BreakpointContent>
@@ -46,8 +46,8 @@
             filePath = "TabFS Extension/SafariWebExtensionHandler.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "60"
-            endingLineNumber = "60"
+            startingLineNumber = "20"
+            endingLineNumber = "20"
             landmarkName = "beginRequest(with:)"
             landmarkType = "7">
          </BreakpointContent>
@@ -62,8 +62,8 @@
             filePath = "TabFS Extension/SafariWebExtensionHandler.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "55"
-            endingLineNumber = "55"
+            startingLineNumber = "15"
+            endingLineNumber = "15"
             landmarkName = "beginRequest(with:)"
             landmarkType = "7">
          </BreakpointContent>
