@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F028D2B625D0B7370095C2D5 /* TabFSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B525D0B7370095C2D5 /* TabFSService.swift */; };
+		F028D2B825D0B7370095C2D5 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B725D0B7370095C2D5 /* main.swift */; };
+		F028D2BC25D0B7370095C2D5 /* TabFSService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = F028D2B125D0B7370095C2D5 /* TabFSService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F028D2D725D0B8500095C2D5 /* TabFSServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */; };
+		F028D2DE25D0B8590095C2D5 /* TabFSServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */; };
 		F04429F625C7507200D998A5 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04429F525C7507200D998A5 /* AppDelegate.swift */; };
 		F04429F925C7507200D998A5 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F04429F725C7507200D998A5 /* Main.storyboard */; };
 		F04429FB25C7507200D998A5 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04429FA25C7507200D998A5 /* ViewController.swift */; };
@@ -22,6 +27,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		F028D2BA25D0B7370095C2D5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F04429E925C7507200D998A5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F028D2B025D0B7370095C2D5;
+			remoteInfo = TabFSService;
+		};
 		F0442A0525C7507400D998A5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F04429E925C7507200D998A5 /* Project object */;
@@ -32,6 +44,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F028D2BD25D0B7370095C2D5 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolderSpec = 16;
+			files = (
+				F028D2BC25D0B7370095C2D5 /* TabFSService.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F0442A1425C7507400D998A5 /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -46,6 +69,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F028D2B125D0B7370095C2D5 /* TabFSService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = TabFSService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabFSServiceProtocols.swift; sourceTree = "<group>"; };
+		F028D2B525D0B7370095C2D5 /* TabFSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabFSService.swift; sourceTree = "<group>"; };
+		F028D2B725D0B7370095C2D5 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		F028D2B925D0B7370095C2D5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F04429F125C7507200D998A5 /* TabFS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TabFS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F04429F425C7507200D998A5 /* TabFS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TabFS.entitlements; sourceTree = "<group>"; };
 		F04429F525C7507200D998A5 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -66,6 +94,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		F028D2AE25D0B7370095C2D5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F04429EE25C7507200D998A5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -84,11 +119,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F028D2B225D0B7370095C2D5 /* TabFSService */ = {
+			isa = PBXGroup;
+			children = (
+				F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */,
+				F028D2B525D0B7370095C2D5 /* TabFSService.swift */,
+				F028D2B725D0B7370095C2D5 /* main.swift */,
+				F028D2B925D0B7370095C2D5 /* Info.plist */,
+			);
+			path = TabFSService;
+			sourceTree = "<group>";
+		};
 		F04429E825C7507200D998A5 = {
 			isa = PBXGroup;
 			children = (
 				F04429F325C7507200D998A5 /* TabFS */,
 				F0442A0A25C7507400D998A5 /* TabFS Extension */,
+				F028D2B225D0B7370095C2D5 /* TabFSService */,
 				F0442A0725C7507400D998A5 /* Frameworks */,
 				F04429F225C7507200D998A5 /* Products */,
 			);
@@ -99,6 +146,7 @@
 			children = (
 				F04429F125C7507200D998A5 /* TabFS.app */,
 				F0442A0325C7507400D998A5 /* TabFS Extension.appex */,
+				F028D2B125D0B7370095C2D5 /* TabFSService.xpc */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -151,6 +199,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		F028D2B025D0B7370095C2D5 /* TabFSService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F028D2C025D0B7370095C2D5 /* Build configuration list for PBXNativeTarget "TabFSService" */;
+			buildPhases = (
+				F028D2AD25D0B7370095C2D5 /* Sources */,
+				F028D2AE25D0B7370095C2D5 /* Frameworks */,
+				F028D2AF25D0B7370095C2D5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TabFSService;
+			productName = TabFSService;
+			productReference = F028D2B125D0B7370095C2D5 /* TabFSService.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 		F04429F025C7507200D998A5 /* TabFS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F0442A1525C7507400D998A5 /* Build configuration list for PBXNativeTarget "TabFS" */;
@@ -159,11 +224,13 @@
 				F04429EE25C7507200D998A5 /* Frameworks */,
 				F04429EF25C7507200D998A5 /* Resources */,
 				F0442A1425C7507400D998A5 /* Embed App Extensions */,
+				F028D2BD25D0B7370095C2D5 /* Embed XPC Services */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				F0442A0625C7507400D998A5 /* PBXTargetDependency */,
+				F028D2BB25D0B7370095C2D5 /* PBXTargetDependency */,
 			);
 			name = TabFS;
 			productName = TabFS;
@@ -196,6 +263,9 @@
 				LastSwiftUpdateCheck = 1210;
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
+					F028D2B025D0B7370095C2D5 = {
+						CreatedOnToolsVersion = 12.1;
+					};
 					F04429F025C7507200D998A5 = {
 						CreatedOnToolsVersion = 12.1;
 					};
@@ -219,11 +289,19 @@
 			targets = (
 				F04429F025C7507200D998A5 /* TabFS */,
 				F0442A0225C7507400D998A5 /* TabFS Extension */,
+				F028D2B025D0B7370095C2D5 /* TabFSService */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		F028D2AF25D0B7370095C2D5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F04429EF25C7507200D998A5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -247,6 +325,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F028D2AD25D0B7370095C2D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F028D2B825D0B7370095C2D5 /* main.swift in Sources */,
+				F028D2B625D0B7370095C2D5 /* TabFSService.swift in Sources */,
+				F028D2D725D0B8500095C2D5 /* TabFSServiceProtocols.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F04429ED25C7507200D998A5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -260,6 +348,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F028D2DE25D0B8590095C2D5 /* TabFSServiceProtocols.swift in Sources */,
 				F068D65625C7C66700DB3AB5 /* FSProcessManager.swift in Sources */,
 				F0442A0C25C7507400D998A5 /* SafariWebExtensionHandler.swift in Sources */,
 			);
@@ -268,6 +357,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F028D2BB25D0B7370095C2D5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F028D2B025D0B7370095C2D5 /* TabFSService */;
+			targetProxy = F028D2BA25D0B7370095C2D5 /* PBXContainerItemProxy */;
+		};
 		F0442A0625C7507400D998A5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F0442A0225C7507400D998A5 /* TabFS Extension */;
@@ -287,6 +381,38 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		F028D2BE25D0B7370095C2D5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TabFSService/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rsnous.TabFSService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+				SWIFT_VERSION = 4.2;
+			};
+			name = Debug;
+		};
+		F028D2BF25D0B7370095C2D5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = TabFSService/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rsnous.TabFSService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_OBJC_INTERFACE_HEADER_NAME = "";
+				SWIFT_VERSION = 4.2;
+			};
+			name = Release;
+		};
 		F0442A0F25C7507400D998A5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -485,6 +611,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F028D2C025D0B7370095C2D5 /* Build configuration list for PBXNativeTarget "TabFSService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F028D2BE25D0B7370095C2D5 /* Debug */,
+				F028D2BF25D0B7370095C2D5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F04429EC25C7507200D998A5 /* Build configuration list for PBXProject "TabFS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
