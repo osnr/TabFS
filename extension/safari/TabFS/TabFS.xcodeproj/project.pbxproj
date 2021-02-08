@@ -12,6 +12,7 @@
 		F028D2BC25D0B7370095C2D5 /* TabFSService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = F028D2B125D0B7370095C2D5 /* TabFSService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F028D2D725D0B8500095C2D5 /* TabFSServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */; };
 		F028D2DE25D0B8590095C2D5 /* TabFSServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */; };
+		F028D2ED25D106F10095C2D5 /* TabFSService.xpc in CopyFiles */ = {isa = PBXBuildFile; fileRef = F028D2B125D0B7370095C2D5 /* TabFSService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F04429F625C7507200D998A5 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04429F525C7507200D998A5 /* AppDelegate.swift */; };
 		F04429F925C7507200D998A5 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F04429F725C7507200D998A5 /* Main.storyboard */; };
 		F04429FB25C7507200D998A5 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F04429FA25C7507200D998A5 /* ViewController.swift */; };
@@ -23,7 +24,6 @@
 		F0442A1E25C7507500D998A5 /* safari in Resources */ = {isa = PBXBuildFile; fileRef = F0442A1A25C7507500D998A5 /* safari */; };
 		F0442A1F25C7507500D998A5 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = F0442A1B25C7507500D998A5 /* manifest.json */; };
 		F0442A2025C7507500D998A5 /* vendor in Resources */ = {isa = PBXBuildFile; fileRef = F0442A1C25C7507500D998A5 /* vendor */; };
-		F068D65625C7C66700DB3AB5 /* FSProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F068D65225C77F7600DB3AB5 /* FSProcessManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +53,16 @@
 				F028D2BC25D0B7370095C2D5 /* TabFSService.xpc in Embed XPC Services */,
 			);
 			name = "Embed XPC Services";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F028D2E525D106BB0095C2D5 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolderSpec = 16;
+			files = (
+				F028D2ED25D106F10095C2D5 /* TabFSService.xpc in CopyFiles */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F0442A1425C7507400D998A5 /* Embed App Extensions */ = {
@@ -90,7 +100,6 @@
 		F0442A1A25C7507500D998A5 /* safari */ = {isa = PBXFileReference; lastKnownFileType = folder; name = safari; path = ../..; sourceTree = "<group>"; };
 		F0442A1B25C7507500D998A5 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../../manifest.json; sourceTree = "<group>"; };
 		F0442A1C25C7507500D998A5 /* vendor */ = {isa = PBXFileReference; lastKnownFileType = folder; name = vendor; path = ../../../vendor; sourceTree = "<group>"; };
-		F068D65225C77F7600DB3AB5 /* FSProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSProcessManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,7 +184,6 @@
 		F0442A0A25C7507400D998A5 /* TabFS Extension */ = {
 			isa = PBXGroup;
 			children = (
-				F068D65225C77F7600DB3AB5 /* FSProcessManager.swift */,
 				F0442A1825C7507500D998A5 /* Resources */,
 				F0442A0B25C7507400D998A5 /* SafariWebExtensionHandler.swift */,
 				F0442A0D25C7507400D998A5 /* Info.plist */,
@@ -244,6 +252,7 @@
 				F04429FF25C7507400D998A5 /* Sources */,
 				F0442A0025C7507400D998A5 /* Frameworks */,
 				F0442A0125C7507400D998A5 /* Resources */,
+				F028D2E525D106BB0095C2D5 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -349,7 +358,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F028D2DE25D0B8590095C2D5 /* TabFSServiceProtocols.swift in Sources */,
-				F068D65625C7C66700DB3AB5 /* FSProcessManager.swift in Sources */,
 				F0442A0C25C7507400D998A5 /* SafariWebExtensionHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os.log
 
 class TabFSService: NSObject, TabFSServiceProtocol {
     var fs: Process!
@@ -28,7 +29,9 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         fsInput = inputPipe.fileHandleForWriting
         fsOutput = outputPipe.fileHandleForReading
         
+        os_log(.default, "TabFSmsg tfs service: willrun")
         try! fs.run()
+        os_log(.default, "TabFSmsg tfs service: ran")
         
         // split new thread
         DispatchQueue.global(qos: .default).async {
@@ -57,6 +60,10 @@ class TabFSService: NSObject, TabFSServiceProtocol {
 
 class TabFSServiceDelegate: NSObject, NSXPCListenerDelegate {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
+        
+        
+        os_log(.default, "TabFSmsg tfs service: starting delegate")
+        
         newConnection.remoteObjectInterface = NSXPCInterface(with: TabFSServiceConsumerProtocol.self)
         
         let exportedObject = TabFSService(app: newConnection.remoteObjectProxy as! TabFSServiceConsumerProtocol)
