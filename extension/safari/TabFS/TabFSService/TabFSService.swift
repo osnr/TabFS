@@ -71,13 +71,17 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                 conn.receiveMessage { (resp, context, isComplete, err) in
                     guard let resp = resp else {
                         // FIXME err
+                        os_log(.default, "resp error: %{public}@", err!.debugDescription as CVarArg)
                         return
                     }
+                    
+                    os_log(.default, "resp %{public}@", String(data: resp, encoding: .utf8) as! CVarArg)
                     self.fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
                     self.fsInput.write(resp)
                     read()
                 }
             }
+            read()
         }
         
         // split new thread
