@@ -14,8 +14,11 @@ class TabFSService: NSObject, TabFSServiceProtocol {
     var fsInput: FileHandle!
     var fsOutput: FileHandle!
     func startFs() {
+        let fileURL = URL(fileURLWithPath: #filePath)
+        let repoURL = fileURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        
         fs = Process()
-        fs.executableURL = URL(fileURLWithPath: "/Users/osnr/Code/tabfs/fs/tabfs")
+        fs.executableURL = repoURL.appendingPathComponent("fs").appendingPathComponent("tabfs")
         fs.currentDirectoryURL = fs.executableURL?.deletingLastPathComponent()
         
         fs.arguments = []
