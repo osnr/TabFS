@@ -38,6 +38,7 @@ class TabFSService: NSObject, TabFSServiceProtocol {
             while true {
                 // read from them
                 let length = self.fsOutput.readData(ofLength: 4).withUnsafeBytes { $0.load(as: UInt32.self) }
+                os_log(.default, "TabFSmsg tfs service: read %{public}d", length)
                 let req = self.fsOutput.readData(ofLength: Int(length))
                 // send to other side of XPC conn
                 app.request(req)
