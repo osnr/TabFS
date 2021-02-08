@@ -27,9 +27,7 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         fsInput = inputPipe.fileHandleForWriting
         fsOutput = outputPipe.fileHandleForReading
         
-        os_log(.default, "TabFSmsg tfs service: willrun")
         try! fs.run()
-        os_log(.default, "TabFSmsg tfs service: ran")
     }
     
     var ws: NWListener!
@@ -61,7 +59,7 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                 let context = NWConnection.ContentContext(identifier: "context", metadata: [metaData])
                 conn.send(content: req, contentContext: context, completion: .contentProcessed({ err in
                     if err != nil {
-                        os_log(.default, "%{public}@ error: %{public}@", String(data: req, encoding: .utf8) as! CVarArg, err!.debugDescription as CVarArg)
+                        os_log(.default, "req %{public}@ error: %{public}@", String(data: req, encoding: .utf8) as! CVarArg, err!.debugDescription as CVarArg)
                         // FIXME: ERROR
                     }
                 }))
@@ -75,7 +73,6 @@ class TabFSService: NSObject, TabFSServiceProtocol {
                         return
                     }
                     
-                    os_log(.default, "resp %{public}@", String(data: resp, encoding: .utf8) as! CVarArg)
                     self.fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
                     self.fsInput.write(resp)
                     read()
@@ -89,7 +86,6 @@ class TabFSService: NSObject, TabFSServiceProtocol {
             while true {
                 // read from them
                 let length = self.fsOutput.readData(ofLength: 4).withUnsafeBytes { $0.load(as: UInt32.self) }
-                os_log(.default, "TabFSmsg tfs service: read %{public}d", length)
                 let req = self.fsOutput.readData(ofLength: Int(length))
                 
                 // send to other side of WEBSOCKET
@@ -107,17 +103,10 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         let response = string.uppercased()
         reply(response)
     }
-//
-//    func response(_ resp: Data) {
-//        fsInput.write(withUnsafeBytes(of: UInt32(resp.count)) { Data($0) })
-//        fsInput.write(resp)
-//    }
 }
 
 class TabFSServiceDelegate: NSObject, NSXPCListenerDelegate {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-        os_log(.default, "TabFSmsg tfs service: starting delegate")
-        
         let exportedObject = TabFSService()
         newConnection.exportedInterface = NSXPCInterface(with: TabFSServiceProtocol.self)
         newConnection.exportedObject = exportedObject
