@@ -32,10 +32,15 @@ class TabFSService: NSObject, TabFSServiceProtocol {
     
     var ws: NWListener!
     func startWs() {
+        // TODO: randomly generate port and report back to caller?
         let port = NWEndpoint.Port(rawValue: 9991)!
+        
         let parameters = NWParameters(tls: nil)
         parameters.allowLocalEndpointReuse = true
         parameters.includePeerToPeer = true
+        // for security ? so people outside your computer can't hijack TabFS at least
+        parameters.requiredInterfaceType = .loopback
+        
         let opts = NWProtocolWebSocket.Options()
         opts.autoReplyPing = true
         parameters.defaultProtocolStack.applicationProtocols.insert(opts, at: 0)
