@@ -24,8 +24,12 @@ it's mounted.
 ### tips
 
 - To open Web inspector: Safari -> Develop menu -> Web Extension
-  Background Pages -> TabFS
+  Background Pages -> TabFS.
 
-- You need to rebuild if you change background.js. This is pretty
-  annoying.
+  Refreshing this inspector should reload the tabfs filesystem, also.
+
+- You need to rebuild in Xcode any time you change background.js
+  (because the extension files are copied into the extension, rather
+  than running directly from folder as in Firefox and Chrome). This is
+  pretty annoying.
 

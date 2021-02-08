@@ -720,15 +720,26 @@ function tryConnect() {
   if (chrome.runtime.getURL('/').startsWith('safari-web-extension://')) { // Safari-only
     chrome.runtime.sendNativeMessage('com.rsnous.tabfs', {op: 'safari_did_connect'}, resp => {
       console.log(resp);
-      const socket = new WebSocket('ws://localhost:9991');
 
-      socket.addEventListener('message', event => {
-        onMessage(JSON.parse(event.data));
-      });
+      let socket;
+      function connectSocket(checkAfterTime) {
+        socket = new WebSocket('ws://localhost:9991');
+        socket.addEventListener('message', event => {
+          onMessage(JSON.parse(event.data));
+        });
 
-      port = { postMessage(message) {
-        socket.send(JSON.stringify(message));
-      } };
+        port = { postMessage(message) {
+          socket.send(JSON.stringify(message));
+        } };
+
+        setTimeout(() => {
+          if (socket.readyState !== 1) {
+            console.log('ws connection failed, retrying in', checkAfterTime);
+            connectSocket(checkAfterTime * 2);
+          }
+        }, checkAfterTime);
+      }
+      connectSocket(200);
     });
     return;
   }

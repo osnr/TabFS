@@ -75,8 +75,9 @@ class TabFSServer {
             func read() {
                 conn.receiveMessage { (resp, context, isComplete, err) in
                     guard let resp = resp else {
-                        // FIXME err
-                        os_log(.default, "resp error: %{public}@", err!.debugDescription as CVarArg)
+                        if let err = err {
+                            os_log(.default, "resp error: %{public}@", err.debugDescription as CVarArg)
+                        }
                         return
                     }
                     
@@ -104,10 +105,10 @@ class TabFSServer {
             }
         }
         
-        // FIXME: notify
-        
+        print("OK")
     }
 }
 
 let server = TabFSServer()
+
 dispatchMain()

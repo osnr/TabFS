@@ -12,13 +12,36 @@ import os.log
 class TabFSService: NSObject, TabFSServiceProtocol {
     func start(withReply reply: @escaping () -> Void) {
         // This XPC call is enough to just force the XPC service to be started.
-        os_log("HELLO")
+        
+        // kill old copies of TabFSServer
+        let killall = Process()
+        killall.launchPath = "/usr/bin/killall"
+        killall.arguments = ["TabFSServer"]
+        killall.launch()
+        killall.waitUntilExit()
+        
+        // spin until old TabFSServer (if any) is gone
+        while true {
+            let pgrep = Process()
+            pgrep.launchPath = "/usr/bin/pgrep"
+            pgrep.arguments = ["TabFSServer"]
+            pgrep.launch()
+            pgrep.waitUntilExit()
+            if pgrep.terminationStatus != 0 { break }
+            
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        
         let server = Process()
-        os_log("HOW ARE YOU?")
+        let serverOutput = Pipe()
         server.executableURL = Bundle.main.url(forResource: "TabFSServer", withExtension: "")!
-        os_log("I AM GOOD")
+        server.standardOutput = serverOutput
         server.launch()
-        os_log("GREAT")
+        
+        // FIXME: should we wait for some signal that the server is ready?
+        // right now, background.js will just periodically retry until it can connect.
+        
+        // tell background.js to try to connect.
         reply()
     }
 }
