@@ -34,7 +34,6 @@ class TabFSService: NSObject, TabFSServiceProtocol {
     
     var ws: NWListener!
     func startWs() {
-        // websocket server
         let port = NWEndpoint.Port(rawValue: 9991)!
         let parameters = NWParameters(tls: nil)
         parameters.allowLocalEndpointReuse = true
@@ -56,9 +55,13 @@ class TabFSService: NSObject, TabFSServiceProtocol {
         var handleRequest: ((_ req: Data) -> Void)?
         ws.newConnectionHandler = { conn in
             conn.start(queue: .main)
+            
             handleRequest = { req in
-                conn.send(content: req, completion: .contentProcessed({ err in
+                let metaData = NWProtocolWebSocket.Metadata(opcode: .text)
+                let context = NWConnection.ContentContext(identifier: "context", metadata: [metaData])
+                conn.send(content: req, contentContext: context, completion: .contentProcessed({ err in
                     if err != nil {
+                        os_log(.default, "%{public}@ error: %{public}@", String(data: req, encoding: .utf8) as! CVarArg, err!.debugDescription as CVarArg)
                         // FIXME: ERROR
                     }
                 }))

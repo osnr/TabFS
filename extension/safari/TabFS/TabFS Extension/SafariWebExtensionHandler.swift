@@ -38,13 +38,13 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             // need this one XPC call to actually initialize the service
             service?.upperCaseString("hello XPC") { response in
                 os_log(.default, "Response from XPC service:  %{public}@", response)
-            }
-            
-            // FIXME: report port back?
-            let response = NSExtensionItem()
-            response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
-            context.completeRequest(returningItems: [response]) { (what) in
-                print(what)
+                
+                // FIXME: report port back?
+                let response = NSExtensionItem()
+                response.userInfo = [ "message": [ "aResponse to": "moop" ] ]
+                context.completeRequest(returningItems: [response]) { (what) in
+                    print(what)
+                }
             }
             
             return
