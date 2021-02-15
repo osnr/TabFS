@@ -673,6 +673,10 @@ function findRoute(path) {
 
 let port;
 async function onMessage(req) {
+  // Safari / Safari extension app API forces you to adopt their
+  // {name, userInfo} structure for the request.
+  if (req.name === 'ToSafari') req = req.userInfo;
+
   if (req.buf) req.buf = atob(req.buf);
   console.log('req', req);
 
@@ -709,6 +713,37 @@ async function onMessage(req) {
 };
 
 function tryConnect() {
+  // Safari is very weird -- it has this native app that we have to talk to,
+  // so we poke that app to wake it up, get it to start the TabFS process
+  // and boot a WebSocket, then connect to it.
+  // Is there a better way to do this?
+  if (chrome.runtime.getURL('/').startsWith('safari-web-extension://')) { // Safari-only
+    chrome.runtime.sendNativeMessage('com.rsnous.tabfs', {op: 'safari_did_connect'}, resp => {
+      console.log(resp);
+
+      let socket;
+      function connectSocket(checkAfterTime) {
+        socket = new WebSocket('ws://localhost:9991');
+        socket.addEventListener('message', event => {
+          onMessage(JSON.parse(event.data));
+        });
+
+        port = { postMessage(message) {
+          socket.send(JSON.stringify(message));
+        } };
+
+        setTimeout(() => {
+          if (socket.readyState !== 1) {
+            console.log('ws connection failed, retrying in', checkAfterTime);
+            connectSocket(checkAfterTime * 2);
+          }
+        }, checkAfterTime);
+      }
+      connectSocket(200);
+    });
+    return;
+  }
+  
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {console.log('disconnect', p)});
