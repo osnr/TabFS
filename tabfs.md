@@ -22,7 +22,7 @@ pre { white-space: pre-wrap; }
 mounts your browser tabs as a filesystem on your computer.
 
 Out of the box, it supports Chrome and (to a lesser extent[^firefox])
-Firefox, on macOS and Linux.[^otherbrowsers]
+Firefox and Safari, on macOS and Linux.[^otherbrowsers]
 
 (**update**: You can now **[sponsor further development of
 TabFS](https://github.com/sponsors/osnr)** and help to turn it from an
@@ -37,11 +37,10 @@ experiment into something really reliable and useful!)
 
 [^otherbrowsers]: plus some related browsers and platforms: it also
     supports [Brave](https://github.com/osnr/TabFS/issues/30),
-    Vivaldi, FreeBSD, etc. It could probably be made to work on other
-    browsers like [Safari](https://github.com/osnr/TabFS/issues/6)
-    that support the WebExtensions API, and [on Windows using Dokan or
-    WinFUSE/WSL stuff (?)](https://github.com/osnr/TabFS/issues/13),
-    but I haven't looked into that yet.
+    Vivaldi, FreeBSD, etc. It could probably be made to work [on
+    Windows using Dokan or WinFUSE/WSL stuff
+    (?)](https://github.com/osnr/TabFS/issues/13), but I haven't
+    looked into that yet.
 
 Each of your open tabs is mapped to a folder.
 
@@ -341,6 +340,12 @@ Load-unpacked the `extension/` folder in this repo.
 **Make a note of the extension ID Chrome assigns.** Mine is
 `jimpolemfaeckpjijgapgkmolankohgj`. We'll use this later.
 
+#### in Safari (WIP)
+
+See [the Safari
+instructions](https://github.com/osnr/TabFS/tree/master/extension/safari). You
+should compile the C filesystem (as below) before trying to run the extension.
+
 #### in Firefox
 
 You'll need to install as a "temporary extension", so it'll only last
@@ -389,6 +394,11 @@ $ ./install.sh chrome jimpolemfaeckpjijgapgkmolankohgj
 contents of
 [install.sh](https://github.com/osnr/TabFS/blob/master/install.sh) for
 the latest on browser and OS support.)
+
+#### Safari (WIP)
+
+See [the Safari
+instructions](https://github.com/osnr/TabFS/tree/master/extension/safari).
 
 #### Firefox
 
