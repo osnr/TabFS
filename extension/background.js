@@ -437,16 +437,16 @@ router["/tabs/by-id/*/control"] = {
   });
 })();
 
-router["/tabs/by-id/*/textareas"] = {
+router["/tabs/by-id/*/inputs"] = {
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
-    // TODO: assign new IDs to textareas without them?
-    const code = `Array.from(document.querySelectorAll('textarea')).map(e => e.id).filter(id => id)`
+    // TODO: assign new IDs to inputs without them?
+    const code = `Array.from(document.querySelectorAll('textarea, input[type=text]')).map(e => e.id).filter(id => id)`
     const ids = (await browser.tabs.executeScript(tabId, {code}))[0];
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-router["/tabs/by-id/*/textareas/*"] = defineFile(async path => {
+router["/tabs/by-id/*/inputs/*"] = defineFile(async path => {
   const [tabId, textareaId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
   const code = `document.getElementById('${textareaId}').value`;
   const textareaValue = (await browser.tabs.executeScript(tabId, {code}))[0];
