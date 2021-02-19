@@ -242,7 +242,9 @@ router["/tabs/by-id"] = {
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
   router["/tabs/by-id/*/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
-                                           buf => ({ active: buf.trim() === "true" }));
+                                           // WEIRD: we do startsWith because you might end up with buf
+                                           // being "truee" (if it was "false", then someone wrote "true")
+                                           buf => ({ active: buf.startsWith("true") }));
 })();
 (function() {
   let nextConsoleFh = 0; let consoleForFh = {};
@@ -494,6 +496,20 @@ router["/windows"] = {
     return { entries: [".", "..", ...windows.map(window => String(window.id))] };
   }
 };
+(function() {
+  const withWindow = (readHandler, writeHandler) => defineFile(async path => {
+    const windowId = parseInt(pathComponent(path, -2));
+    const window = await browser.windows.get(windowId);
+    return readHandler(window);
+
+  }, writeHandler ? async (path, buf) => {
+    const windowId = parseInt(pathComponent(path, -2));
+    await browser.windows.update(windowId, writeHandler(buf));
+  } : undefined);
+
+  router["/windows/*/focused"] = withWindow(window => JSON.stringify(window.focused) + '\n',
+                                            buf => ({ focused: buf.startsWith('true') }));
+})();
 router["/windows/last-focused"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
