@@ -633,7 +633,7 @@ for (let key in router) {
     router[key] = {
       async getattr() {
         return {
-          st_mode: unix.S_IFREG | ((router[key].read && 0444) || (router[key].write && 0222)),
+          st_mode: unix.S_IFREG | ((router[key].read && 0444) | (router[key].write && 0222)),
           st_nlink: 1,
           st_size: 100 // FIXME
         };
