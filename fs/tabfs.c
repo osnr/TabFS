@@ -416,7 +416,7 @@ static int tabfs_create(const char *path, mode_t mode, struct fuse_file_info *fi
     size_t rsize;
     exchange_json(&rdata, &rsize,
         "op: %Q, path: %Q, mode: %d",
-        "mkdir", path, mode);
+        "create", path, mode);
 
     parse_and_free_response(rdata, rsize, "");
 
