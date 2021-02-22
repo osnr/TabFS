@@ -94,7 +94,7 @@ int main() {
             char ta[100] = {0}; fread(ta, 1, sizeof(ta), console);
             assert(strcmp(ta, "initial text") == 0);
 
-            assert(file_contents_equal("../fs/mnt/tabs/last-focused/textareas/ta.txt", ta));
+            assert(file_contents_equal("../fs/mnt/tabs/last-focused/inputs/ta.txt", ta));
 
             fclose(console);
         }
