@@ -327,6 +327,41 @@ router["/tabs/by-id/*/execute-script"] = {
   },
   async truncate({path, size}) { return {}; }
 };
+(function() {
+  let evals = {};
+  router["/tabs/by-id/*/evals"] = {
+    async readdir({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return { entries: [".", "..", ...Object.keys(evals[tabId] || [])] };
+    },
+    getattr() {
+      return {
+        st_mode: unix.S_IFDIR | 0777, // writable so you can create evals
+        st_nlink: 3,
+        st_size: 0,
+      };
+    },
+  };
+  router["/tabs/by-id/*/evals/*"] = {
+    // NOTE: eval runs in extension's content script, not in original page JS context
+    async create({path, mode}) {
+      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      evals[tabId] = evals[tabId] || {};
+      evals[tabId][expr] = async function() {
+        return (await browser.tabs.executeScript(tabId, {code: expr}))[0];
+      };
+      return {};
+    },
+
+    ...defineFile(async path => {
+      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      if (!evals[tabId] || !(expr in evals[tabId])) { throw new UnixError(unix.ENOENT); }
+      return JSON.stringify(await evals[tabId][expr]()) + '\n';
+    })
+  };
+  // TODO: allow deletion of evals
+})();
+
 // TODO: imports
 // (function() {
 //   const imports = {};
@@ -340,9 +375,6 @@ router["/tabs/by-id/*/execute-script"] = {
 //     }
 //   };
 // })();
-// TODO: watches
-// router["/tabs/by-id/*/watches"] = {
-// };
 router["/tabs/by-id/*/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
