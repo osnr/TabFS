@@ -447,13 +447,14 @@ router["/tabs/by-id/*/inputs"] = {
   }
 };
 router["/tabs/by-id/*/inputs/*"] = defineFile(async path => {
-  const [tabId, textareaId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
-  const code = `document.getElementById('${textareaId}').value`;
-  const textareaValue = (await browser.tabs.executeScript(tabId, {code}))[0];
-  return textareaValue;
+  const [tabId, inputId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+  const code = `document.getElementById('${inputId}').value`;
+  const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
+  if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
+  return inputValue;
 }, async (path, buf) => {
-  const [tabId, textareaId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
-  const code = `document.getElementById('${textareaId}').value = unescape('${escape(buf)}')`;
+  const [tabId, inputId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+  const code = `document.getElementById('${inputId}').value = unescape('${escape(buf)}')`;
   await browser.tabs.executeScript(tabId, {code});
 });
 
@@ -496,6 +497,13 @@ router["/windows"] = {
     return { entries: [".", "..", ...windows.map(window => String(window.id))] };
   }
 };
+router["/windows/last-focused"] = {
+  // a symbolic link to /windows/[id for this window]
+  async readlink({path}) {
+    const windowId = (await browser.windows.getLastFocused()).id;
+    return { buf: windowId };
+  }
+};
 (function() {
   const withWindow = (readHandler, writeHandler) => defineFile(async path => {
     const windowId = parseInt(pathComponent(path, -2));
@@ -510,15 +518,8 @@ router["/windows"] = {
   router["/windows/*/focused"] = withWindow(window => JSON.stringify(window.focused) + '\n',
                                             buf => ({ focused: buf.startsWith('true') }));
 })();
-router["/windows/last-focused"] = {
-  // a symbolic link to /windows/[id for this window]
-  async readlink({path}) {
-    const windowId = (await browser.windows.getLastFocused()).id;
-    return { buf: windowId };
-  }
-};
 router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
-  // this is a window thing (rn, the _only_ window thing) because you
+  // screen capture is a window thing and not a tab thing because you
   // can only capture the visible tab for each window anyway; you
   // can't take a screenshot of just any arbitrary tab
   const windowId = parseInt(pathComponent(path, -2));
