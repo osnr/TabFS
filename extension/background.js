@@ -336,7 +336,7 @@ router["/tabs/by-id/*/execute-script"] = {
     },
     getattr() {
       return {
-        st_mode: unix.S_IFDIR | 0777, // writable so you can create evals
+        st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
         st_nlink: 3,
         st_size: 0,
       };
@@ -352,14 +352,22 @@ router["/tabs/by-id/*/execute-script"] = {
       };
       return {};
     },
+    async unlink({path}) {
+      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      delete evals[tabId][expr]; // TODO: also delete evals[tabId] if empty
+      return {};
+    },
 
     ...defineFile(async path => {
       const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
       if (!evals[tabId] || !(expr in evals[tabId])) { throw new UnixError(unix.ENOENT); }
       return JSON.stringify(await evals[tabId][expr]()) + '\n';
+    }, () => {
+      // setData handler -- only providing this so that getattr reports
+      // that the file is writable, so it can be deleted without annoying prompt.
+      throw new UnixError(unix.EPERM);
     })
   };
-  // TODO: allow deletion of evals
 })();
 
 // TODO: imports
