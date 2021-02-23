@@ -165,11 +165,16 @@ could do in the first place)
 $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 ```
 
-### Run script
+### [Evaluate JavaScript on a page](https://twitter.com/rsnous/status/1364008241588363264)
 
 ```
-$ echo 'document.body.style.background = "green"' > mnt/tabs/last-focused/execute-script
-$ echo 'alert("hi!")' > mnt/tabs/last-focused/execute-script
+$ touch mnt/tabs/last-focused/evals/'document.body.style.background = "green"'
+
+$ touch mnt/tabs/last-focused/evals/'alert("hi!")'
+
+$ touch mnt/tabs/last-focused/evals/'2 + 2'
+$ cat mnt/tabs/last-focused/evals/'2 + 2'
+4
 ```
 
 ### Get images / scripts / other resource files from page
