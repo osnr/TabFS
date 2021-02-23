@@ -165,7 +165,7 @@ could do in the first place)
 $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 ```
 
-### [Evaluate JavaScript on a page](https://twitter.com/rsnous/status/1364008241588363264)
+### Evaluate JavaScript on a page: [demo](https://twitter.com/rsnous/status/1364008241588363264)
 
 ```
 $ touch mnt/tabs/last-focused/evals/'document.body.style.background = "green"'
