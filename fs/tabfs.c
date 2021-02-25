@@ -409,14 +409,14 @@ static int tabfs_mkdir(const char *path, mode_t mode) {
     return 0;
 }
 
-static int tabfs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    (void)fi;
+static int tabfs_mknod(const char *path, mode_t mode, dev_t rdev) {
+    (void)rdev;
 
     char *rdata;
     size_t rsize;
     exchange_json(&rdata, &rsize,
         "op: %Q, path: %Q, mode: %d",
-        "create", path, mode);
+        "mknod", path, mode);
 
     parse_and_free_response(rdata, rsize, "");
 
@@ -454,7 +454,7 @@ static const struct fuse_operations tabfs_oper = {
     .unlink   = tabfs_unlink,
 
     .mkdir  = tabfs_mkdir,
-    .create = tabfs_create,
+    .mknod = tabfs_mknod,
 
     .init = tabfs_init,
 };
