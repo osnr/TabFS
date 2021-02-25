@@ -247,11 +247,13 @@ router["/tabs/by-id"] = {
                                            buf => ({ active: buf.startsWith("true") }));
 })();
 (function() {
-  let evals = {};
+  const evals = {};
   router["/tabs/by-id/*/evals"] = {
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -2));
-      return { entries: [".", "..", ...Object.keys(evals[tabId] || [])] };
+      return { entries: [".", "..",
+                         ...Object.keys(evals[tabId] || {}),
+                         ...Object.keys(evals[tabId] || {}).map(f => f + '.result')] };
     },
     getattr() {
       return {
@@ -263,24 +265,75 @@ router["/tabs/by-id"] = {
   };
   router["/tabs/by-id/*/evals/*"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
-    async create({path, mode}) {
-      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    async mknod({path, mode}) {
+      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
       evals[tabId] = evals[tabId] || {};
-      evals[tabId][expr] = async function() {
+      evals[tabId][name] = { code: '' };
+      return {};
+    },
+    async unlink({path}) {
+      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      delete evals[tabId][name]; // TODO: also delete evals[tabId] if empty
+      return {};
+    },
+
+    ...defineFile(async path => {
+      const [tabId, filename] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      const name = filename.replace(/\.result$/, '');
+      if (!evals[tabId] || !(name in evals[tabId])) { throw new UnixError(unix.ENOENT); }
+
+      if (filename.endsWith('.result')) {
+        return evals[tabId][name].result || '';
+      } else {
+        return evals[tabId][name].code;
+      }
+    }, async (path, buf) => {
+      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      if (name.endsWith('.result')) {
+        // FIXME
+
+      } else {
+        evals[tabId][name].code = buf;
+        evals[tabId][name].result = JSON.stringify((await browser.tabs.executeScript(tabId, {code: buf}))[0]) + '\n';
+      }
+    })
+  };
+})();
+(function() {
+  const watches = {};
+  router["/tabs/by-id/*/watches"] = {
+    async readdir({path}) {
+      const tabId = parseInt(pathComponent(path, -2));
+      return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
+    },
+    getattr() {
+      return {
+        st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm watches
+        st_nlink: 3,
+        st_size: 0,
+      };
+    },
+  };
+  router["/tabs/by-id/*/watches/*"] = {
+    // NOTE: eval runs in extension's content script, not in original page JS context
+    async mknod({path, mode}) {
+      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+      watches[tabId] = watches[tabId] || {};
+      watches[tabId][expr] = async function() {
         return (await browser.tabs.executeScript(tabId, {code: expr}))[0];
       };
       return {};
     },
     async unlink({path}) {
       const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-      delete evals[tabId][expr]; // TODO: also delete evals[tabId] if empty
+      delete watches[tabId][expr]; // TODO: also delete watches[tabId] if empty
       return {};
     },
 
     ...defineFile(async path => {
       const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-      if (!evals[tabId] || !(expr in evals[tabId])) { throw new UnixError(unix.ENOENT); }
-      return JSON.stringify(await evals[tabId][expr]()) + '\n';
+      if (!watches[tabId] || !(expr in watches[tabId])) { throw new UnixError(unix.ENOENT); }
+      return JSON.stringify(await watches[tabId][expr]()) + '\n';
     }, () => {
       // setData handler -- only providing this so that getattr reports
       // that the file is writable, so it can be deleted without annoying prompt.

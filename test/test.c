@@ -70,14 +70,14 @@ int main() {
         }
         assert(system("cat ../fs/mnt/tabs/last-focused/debugger/scripts/*test-script.js") == 0);
 
-        // FIXME: rewrite to use TAB/evals
-        /* { */
-        /*     FILE* console = fopen("../fs/mnt/tabs/last-focused/console", "r"); */
-        /*     assert(system("echo \"console.log('hi')\" > ../fs/mnt/tabs/last-focused/execute-script") == 0); */
-        /*     char hi[3] = {0}; fread(hi, 1, 2, console); */
-        /*     assert(strcmp(hi, "hi") == 0); */
-        /*     fclose(console); */
-        /* } */
+        {
+            assert(system("echo '2 + 2' > ../fs/mnt/tabs/last-focused/evals/twoplustwo.js") == 0);
+
+            FILE* result = fopen("../fs/mnt/tabs/last-focused/evals/twoplustwo.js.result", "r");
+            char four[2] = {0}; fread(four, 1, 1, result);
+            assert(strcmp(four, "4") == 0);
+            fclose(result);
+        }
 
         // try to shorten the URL (#40)
         /* assert(system("echo about:blank > ../fs/mnt/tabs/last-focused/url.txt") == 0); */
@@ -88,18 +88,19 @@ int main() {
 
     {
         assert(system("echo file://$(pwd)/test-textarea.html > ../fs/mnt/tabs/create") == 0);
-        // FIXME: rewrite to use TAB/evals
-        /* { */
-        /*     FILE* console = fopen("../fs/mnt/tabs/last-focused/console", "r"); */
-        /*     assert(system("echo \"console.log(document.getElementById('ta').value)\" > ../fs/mnt/tabs/last-focused/execute-script") == 0); */
+        {
+            assert(system("echo \"document.getElementById('ta').value\" > ../fs/mnt/tabs/last-focused/evals/ta.js") == 0);
 
-        /*     char ta[100] = {0}; fread(ta, 1, sizeof(ta), console); */
-        /*     assert(strcmp(ta, "initial text") == 0); */
+            FILE* result = fopen("../fs/mnt/tabs/last-focused/evals/ta.js.result", "r");
+            char ta[100] = {0}; fread(ta, 1, sizeof(ta), result);
+            fclose(result);
 
-        /*     assert(file_contents_equal("../fs/mnt/tabs/last-focused/inputs/ta.txt", ta)); */
+            assert(strcmp(ta, "\"initial text\"\n") == 0);
 
-        /*     fclose(console); */
-        /* } */
+            // FIXME: check against the inputs file ...
+            /* assert(file_contents_equal("../fs/mnt/tabs/last-focused/inputs/ta.txt", ta)); */
+
+        }
         assert(system("echo remove > ../fs/mnt/tabs/last-focused/control") == 0);
     }
 
