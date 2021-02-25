@@ -167,13 +167,15 @@ $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 
 ### Evaluate JavaScript on a page: [demo](https://twitter.com/rsnous/status/1364008241588363264)
 
+(was `evals` in linked demo, is now renamed to `watches`)
+
 ```
-$ touch mnt/tabs/last-focused/evals/'document.body.style.background = "green"'
+$ touch mnt/tabs/last-focused/watches/'document.body.style.background = "green"'
 
-$ touch mnt/tabs/last-focused/evals/'alert("hi!")'
+$ touch mnt/tabs/last-focused/watches/'alert("hi!")'
 
-$ touch mnt/tabs/last-focused/evals/'2 + 2'
-$ cat mnt/tabs/last-focused/evals/'2 + 2'
+$ touch mnt/tabs/last-focused/watches/'2 + 2'
+$ cat mnt/tabs/last-focused/watches/'2 + 2'
 4
 ```
 
