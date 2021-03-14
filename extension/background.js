@@ -263,7 +263,7 @@ router["/tabs/by-id"] = {
   router["/tabs/by-id/*/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
   router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
   router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
-  router["/tabs/by-id/*/source.html"] = fromScript(`document.body.innerHTML`);
+  router["/tabs/by-id/*/body.html"] = fromScript(`document.body.innerHTML`);
 
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
