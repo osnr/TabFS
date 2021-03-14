@@ -32,7 +32,30 @@ function pathComponent(path, i) {
   const components = path.split('/');
   return components[i >= 0 ? i : components.length + i];
 }
-function sanitize(s) { return s.replace(/[\/]/gm, '_'); }
+const sanitize = (function() {
+  // from https://github.com/parshap/node-sanitize-filename/blob/209c39b914c8eb48ee27bcbde64b2c7822fdf3de/index.js
+
+  var illegalRe = /[\/\?<>\\:\*\|"]/g;
+  var controlRe = /[\x00-\x1f\x80-\x9f]/g;
+  var reservedRe = /^\.+$/;
+  var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+  var windowsTrailingRe = /[\. ]+$/;
+
+  function sanitize(input, replacement) {
+    if (typeof input !== 'string') {
+      throw new Error('Input must be string');
+    }
+    var sanitized = input
+      .replace(illegalRe, replacement)
+      .replace(controlRe, replacement)
+      .replace(reservedRe, replacement)
+      .replace(windowsReservedRe, replacement)
+      .replace(windowsTrailingRe, replacement);
+    return sanitized.slice(0, 200);
+  }
+  return input => sanitize(input, '_');
+})();
+
 const stringToUtf8Array = (function() {
   const encoder = new TextEncoder("utf-8");
   return str => encoder.encode(str);
@@ -386,7 +409,7 @@ router["/tabs/by-id/*/control"] = {
       const tabId = parseInt(pathComponent(path, -3));
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
       const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
-      return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url).slice(0, 200)))] };
+      return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
   router["/tabs/by-id/*/debugger/resources/*"] = defineFile(async path => {
@@ -395,7 +418,7 @@ router["/tabs/by-id/*/control"] = {
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     for (let resource of frameTree.resources) {
-      const resourceSuffix = sanitize(String(resource.url).slice(0, 200));
+      const resourceSuffix = sanitize(String(resource.url));
       if (resourceSuffix === suffix) {
         let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
           frameId: frameTree.frame.id,
@@ -418,14 +441,14 @@ router["/tabs/by-id/*/control"] = {
       // it's useful to put the ID first so the .js extension stays on
       // the end
       const scriptFileNames = Object.values(TabManager.scriptsForTab[tabId])
-            .map(params => params.scriptId + "_" + sanitize(params.url).slice(0, 200));
+            .map(params => params.scriptId + "_" + sanitize(params.url));
       return { entries: [".", "..", ...scriptFileNames] };
     }
   };
   function pathScriptInfo(tabId, path) {
     const [scriptId, ...rest] = pathComponent(path, -1).split("_");
     const scriptInfo = TabManager.scriptsForTab[tabId][scriptId];
-    if (!scriptInfo || sanitize(scriptInfo.url).slice(0, 200) !== rest.join("_")) {
+    if (!scriptInfo || sanitize(scriptInfo.url) !== rest.join("_")) {
       throw new UnixError(unix.ENOENT);
     }
     return scriptInfo;
@@ -480,7 +503,7 @@ router["/tabs/by-title"] = {
   },
   async readdir() {
     const tabs = await browser.tabs.query({});
-    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title).slice(0, 200)) + "_" + String(tab.id))] };
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "_" + String(tab.id))] };
   }
 };
 router["/tabs/by-title/*"] = {
