@@ -35,7 +35,10 @@ function pathComponent(path, i) {
 const sanitize = (function() {
   // from https://github.com/parshap/node-sanitize-filename/blob/209c39b914c8eb48ee27bcbde64b2c7822fdf3de/index.js
 
-  var illegalRe = /[\/\?<>\\:\*\|"]/g;
+  // I've added ' ' to the list of illegal characters. it's a
+  // decision whether we want to allow spaces in filenames... I think
+  // they're annoying, so I'm sanitizing them out for now.
+  var illegalRe = /[\/\?<>\\:\*\|" ]/g;
   var controlRe = /[\x00-\x1f\x80-\x9f]/g;
   var reservedRe = /^\.+$/;
   var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
