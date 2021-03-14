@@ -32,7 +32,7 @@ function pathComponent(path, i) {
   const components = path.split('/');
   return components[i >= 0 ? i : components.length + i];
 }
-function sanitize(s) { return s.replace(/[^A-Za-z0-9_\-\.]/gm, '_'); }
+function sanitize(s) { return s.replace(/[\/]/gm, '_'); }
 const stringToUtf8Array = (function() {
   const encoder = new TextEncoder("utf-8");
   return str => encoder.encode(str);
