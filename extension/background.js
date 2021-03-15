@@ -368,19 +368,6 @@ router["/tabs/by-id"] = {
   };
 })();
 
-// TODO: imports
-// (function() {
-//   const imports = {};
-//   // .json - autoparse, spit back out changes in data
-//   // .js
-//   // .png
-//   // write back modify
-//   router["/tabs/by-id/*/imports"] = {
-//     readdir({path}) {
-      
-//     }
-//   };
-// })();
 router["/tabs/by-id/*/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
@@ -714,10 +701,6 @@ function findRoute(path) {
 
 let port;
 async function onMessage(req) {
-  // Safari / Safari extension app API forces you to adopt their
-  // {name, userInfo} structure for the request.
-  if (req.name === 'ToSafari') req = req.userInfo;
-
   if (req.buf) req.buf = atob(req.buf);
   console.log('req', req);
 
