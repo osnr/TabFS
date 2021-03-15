@@ -82,7 +82,6 @@ async function detachDebugger(tabId) {
   }));
 }
 const TabManager = (function() {
-  if (TESTING) return;
   if (chrome.debugger) chrome.debugger.onEvent.addListener((source, method, params) => {
     console.log(source, method, params);
     if (method === "Page.frameStartedLoading") {
@@ -614,17 +613,6 @@ for (let i = 10; i >= 0; i--) {
   // so you could patch more routes in at runtime, but I need to think
   // a bit about how to make that work with wildcards.
 }
-if (TESTING) { // I wish I could color this section with... a pink background, or something.
-  const assert = require('assert');
-  (async () => {
-    assert.deepEqual(await router['/tabs/by-id/*'].readdir(), { entries: ['.', '..', 'url.txt', 'title.txt', 'text.txt', 'window', 'control', 'debugger'] });
-    assert.deepEqual(await router['/'].readdir(), { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
-    assert.deepEqual(await router['/tabs'].readdir(), { entries: ['.', '..', 'create', 'by-id', 'by-title', 'last-focused'] });
-    
-    assert.deepEqual(findRoute('/tabs/by-id/TABID/url.txt'), router['/tabs/by-id/*/url.txt']);
-  })()
-}
-
 
 // fill in default implementations of fs ops
 for (let key in router) {
@@ -773,6 +761,12 @@ function tryConnect() {
   port.onDisconnect.addListener(p => {console.log('disconnect', p)});
 }
 
-if (!TESTING) {
+
+if (typeof process === 'object') {
+  // we're running in node (as part of a test)
+  // return everything they might want to test
+  module.exports = {router, findRoute}; 
+
+} else {
   tryConnect();
 }

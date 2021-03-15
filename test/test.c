@@ -55,7 +55,7 @@ int main() {
     }
 
     {
-        assert(system("echo file://$(pwd)/test-page.html > ../fs/mnt/tabs/create") == 0);
+        assert(system("echo file://$(pwd)/test-resources/test-page.html > ../fs/mnt/tabs/create") == 0);
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/title.txt", "Title of Test Page"));
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/text.txt", "Body Text of Test Page"));
 
@@ -87,7 +87,7 @@ int main() {
     }
 
     {
-        assert(system("echo file://$(pwd)/test-textarea.html > ../fs/mnt/tabs/create") == 0);
+        assert(system("echo file://$(pwd)/test-resources/test-textarea.html > ../fs/mnt/tabs/create") == 0);
         {
             assert(system("echo \"document.getElementById('ta').value\" > ../fs/mnt/tabs/last-focused/evals/ta.js") == 0);
 
