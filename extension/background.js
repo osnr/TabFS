@@ -223,26 +223,6 @@ router["/tabs/by-id"] = {
     return { entries: [".", "..", ...tabs.map(tab => String(tab.id))] };
   }
 };
-// title.txt
-// url.txt
-// text.txt
-// TODO: document.html
-
-// eval-in
-// eval-out
-
-// TODO: mem (?)
-// TODO: cpu (?)
-
-// TODO: dom/ ?
-// TODO: globals/ ?
-
-// TODO: archive.mhtml ?
-// TODO: printed.pdf
-// control
-
-// there's a question about whether to do stuff through injected
-// JavaScript or through the devtools API.
 
 (function() {
   const withTab = (readHandler, writeHandler) => defineFile(async path => {
@@ -259,23 +239,22 @@ router["/tabs/by-id"] = {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
-  router["/tabs/by-id/*/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
-  router["/tabs/by-id/*/title.txt"] = withTab(tab => tab.title + "\n");
-  router["/tabs/by-id/*/text.txt"] = fromScript(`document.body.innerText`);
-  router["/tabs/by-id/*/body.html"] = fromScript(`document.body.innerHTML`);
+  router["/tabs/by-id/#TAB_ID/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
+  router["/tabs/by-id/#TAB_ID/title.txt"] = withTab(tab => tab.title + "\n");
+  router["/tabs/by-id/#TAB_ID/text.txt"] = fromScript(`document.body.innerText`);
+  router["/tabs/by-id/#TAB_ID/body.html"] = fromScript(`document.body.innerHTML`);
 
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
-  router["/tabs/by-id/*/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
-                                           // WEIRD: we do startsWith because you might end up with buf
-                                           // being "truee" (if it was "false", then someone wrote "true")
-                                           buf => ({ active: buf.startsWith("true") }));
+  router["/tabs/by-id/#TAB_ID/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
+                                                 // WEIRD: we do startsWith because you might end up with buf
+                                                 // being "truee" (if it was "false", then someone wrote "true")
+                                                 buf => ({ active: buf.startsWith("true") }));
 })();
 (function() {
   const evals = {};
-  router["/tabs/by-id/*/evals"] = {
-    async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
+  router["/tabs/by-id/#TAB_ID/evals"] = {
+    async readdir({path, tabId}) {
       return { entries: [".", "..",
                          ...Object.keys(evals[tabId] || {}),
                          ...Object.keys(evals[tabId] || {}).map(f => f + '.result')] };
@@ -288,7 +267,7 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/*/evals/*"] = {
+  router["/tabs/by-id/#TAB_ID/evals/*"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({path, mode}) {
       const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
@@ -326,7 +305,7 @@ router["/tabs/by-id"] = {
 })();
 (function() {
   const watches = {};
-  router["/tabs/by-id/*/watches"] = {
+  router["/tabs/by-id/#TAB_ID/watches"] = {
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -2));
       return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
@@ -339,7 +318,7 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/*/watches/*"] = {
+  router["/tabs/by-id/#TAB_ID/watches/*"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({path, mode}) {
       const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
@@ -367,14 +346,14 @@ router["/tabs/by-id"] = {
   };
 })();
 
-router["/tabs/by-id/*/window"] = {
+router["/tabs/by-id/#TAB_ID/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({path}) {
     const tabId = parseInt(pathComponent(path, -2)); const tab = await browser.tabs.get(tabId);
     return { buf: "../../../windows/" + tab.windowId };
   }
 };
-router["/tabs/by-id/*/control"] = {
+router["/tabs/by-id/#TAB_ID/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
   async write({path, buf}) {
     const tabId = parseInt(pathComponent(path, -2));
@@ -393,7 +372,7 @@ router["/tabs/by-id/*/control"] = {
   // resources/
   // TODO: scripts/ TODO: allow creation, eval immediately
 
-  router["/tabs/by-id/*/debugger/resources"] = {
+  router["/tabs/by-id/#TAB_ID/debugger/resources"] = {
     async readdir({path}) {
       const tabId = parseInt(pathComponent(path, -3));
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
@@ -401,7 +380,7 @@ router["/tabs/by-id/*/control"] = {
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  router["/tabs/by-id/*/debugger/resources/*"] = defineFile(async path => {
+  router["/tabs/by-id/#TAB_ID/debugger/resources/*"] = defineFile(async path => {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
@@ -419,7 +398,7 @@ router["/tabs/by-id/*/control"] = {
     }
     throw new UnixError(unix.ENOENT);
   });
-  router["/tabs/by-id/*/debugger/scripts"] = {
+  router["/tabs/by-id/#TAB_ID/debugger/scripts"] = {
     async opendir({path}) {
       const tabId = parseInt(pathComponent(path, -3));
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -442,7 +421,7 @@ router["/tabs/by-id/*/control"] = {
     }
     return scriptInfo;
   }
-  router["/tabs/by-id/*/debugger/scripts/*"] = defineFile(async path => {
+  router["/tabs/by-id/#TAB_ID/debugger/scripts/*"] = defineFile(async path => {
     const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
@@ -461,16 +440,17 @@ router["/tabs/by-id/*/control"] = {
   });
 })();
 
-router["/tabs/by-id/*/inputs"] = {
+router["/tabs/by-id/#TAB_ID/inputs"] = {
   async readdir({path}) {
     const tabId = parseInt(pathComponent(path, -2));
     // TODO: assign new IDs to inputs without them?
-    const code = `Array.from(document.querySelectorAll('textarea, input[type=text]')).map(e => e.id).filter(id => id)`
+    const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
+                    .map(e => e.id).filter(id => id)`;
     const ids = (await browser.tabs.executeScript(tabId, {code}))[0];
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-router["/tabs/by-id/*/inputs/*"] = defineFile(async path => {
+router["/tabs/by-id/#TAB_ID/inputs/*"] = defineFile(async path => {
   const [tabId, inputId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
@@ -631,8 +611,36 @@ for (let i = 10; i >= 0; i--) {
   // a bit about how to make that work with wildcards.
 }
 
-// fill in default implementations of fs ops
+
 for (let key in router) {
+  // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[^/]+)\/url.txt
+  router[key].__regex = new RegExp(
+    '^' + key
+      .split('/')
+      .map(keySegment => keySegment
+           .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+           .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
+             return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>[^/]+)`;
+           }))
+      .join('/') + '$');
+
+  router[key].__match = function(path) {
+    const result = router[key].__regex.exec(path);
+    if (!result) { return; }
+
+    const vars = {};
+    for (let [typeAndVarName, value] of Object.entries(result.groups)) {
+      let [type_, varName] = typeAndVarName.split('$');
+      // TAB_ID -> tabId
+      varName = varName.toLowerCase();
+      varName = varName.replace(/_([a-z])/g, c => c[1].toUpperCase());
+      vars[varName] = type_ === 'int' ? parseInt(value) : value;
+    }
+    return vars;
+  };
+
+  // Fill in default implementations of fs ops:
+
   // if readdir -> directory -> add getattr, opendir, releasedir
   if (router[key].readdir) {
     router[key] = {
@@ -671,37 +679,22 @@ for (let key in router) {
           st_size: 100 // FIXME
         };
       },
-      open() {
-        return { fh: 0 };
-      },
-      release() {
-        return {};
-      },
+      open() { return { fh: 0 }; },
+      release() { return {}; },
       ...router[key]
     };
   }
 }
 
 function findRoute(path) {
-  let pathSegments = path.split("/");
-  
-  if (pathSegments[pathSegments.length - 1].startsWith("._")) {
+  if (path.match(/\/\._[^\/]+$/)) {
     throw new UnixError(unix.ENOTSUP); // Apple Double file for xattrs
   }
 
-  let routingPath = "";
-  for (let segment of pathSegments) {
-    if (routingPath === "/") { routingPath = ""; }
-
-    if (router[routingPath + "/*"]) {
-      routingPath += "/*";
-    } else if (router[routingPath + "/" + segment]) {
-      routingPath += "/" + segment;
-    } else {
-      throw new UnixError(unix.ENOENT);
-    }
+  for (let route of Object.values(router)) {
+    if (route.__match(path)) { return route; }
   }
-  return router[routingPath];
+  throw new UnixError(unix.ENOENT);
 }
 
 let port;
@@ -728,7 +721,7 @@ async function onMessage(req) {
     response = {
       op: req.op,
       error: e instanceof UnixError ? e.error : unix.EIO
-    }
+    };
   }
   /* console.timeEnd(req.op + ':' + req.path);*/
 
@@ -775,7 +768,7 @@ function tryConnect() {
   
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
   port.onMessage.addListener(onMessage);
-  port.onDisconnect.addListener(p => {console.log('disconnect', p)});
+  port.onDisconnect.addListener(p => { console.log('disconnect', p); });
 }
 
 

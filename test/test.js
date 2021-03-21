@@ -6,7 +6,7 @@ global.chrome = {};
 const {router, findRoute} = require('../extension/background');
 
 (async () => {
-  const tabRoute = await router['/tabs/by-id/*'].readdir();
+  const tabRoute = await router['/tabs/by-id/#TAB_ID'].readdir();
   assert(['.', '..', 'url.txt', 'title.txt', 'text.txt']
     .every(file => tabRoute.entries.includes(file)));
 
@@ -16,6 +16,6 @@ const {router, findRoute} = require('../extension/background');
                    { entries: ['.', '..', 'create',
                                'by-id', 'by-title', 'last-focused'] });
   
-  assert.deepEqual(findRoute('/tabs/by-id/TABID/url.txt'),
-                   router['/tabs/by-id/*/url.txt']);
+  assert.deepEqual(findRoute('/tabs/by-id/10/url.txt'),
+                   router['/tabs/by-id/#TAB_ID/url.txt']);
 })();
