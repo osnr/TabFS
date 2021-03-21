@@ -585,6 +585,23 @@ router["/runtime/reload"] = {
   },
   truncate() { return {}; }
 };
+router["/runtime/background.js.html"] = defineFile(async path => {
+  const js = await window.fetch(chrome.runtime.getURL('background.js'))
+                         .then(r => r.text());
+  return `
+<html>
+  <body>
+    <dl>
+      ${Object.entries(router).map(([a, b]) => `
+        <dt>${a}</dt>
+        <dd>${b}</dd>
+      `).join('\n')}
+    </dl>
+    <pre><code>${js}</code></pre>
+  </body>
+</html>
+  `;
+});
 
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever. Basically, you need to start at
