@@ -538,9 +538,35 @@ Router["/runtime/reload"] = {
 };
 Router["/runtime/background.js.html"] = defineFile(async () => {
   const js = await window.fetch(chrome.runtime.getURL('background.js'))
-                         .then(r => r.text());
+        .then(r => r.text());
+
+  const classes = [
+    [/Router\["[^\]]+"\] = /, 'route']
+  ];
+
+  const classedJs =
+    js.split('\n')
+        .map(line => {
+          const class_ = classes.find(([re, class_]) => re.test(line));
+          line = line
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+          if (!class_) { return `<span>${line}</span>`; }
+          return `<span class="${class_[1]}">${line}</span>`;
+        })
+        .join('\n');
+
   return `
 <html>
+  <head>
+    <style>
+      .route { background-color: red; }
+      span:not(.route) { height: 0px; }
+    </style>
+  </head>
   <body>
     <dl>
       ${Object.entries(Router).map(([a, b]) => `
@@ -548,7 +574,7 @@ Router["/runtime/background.js.html"] = defineFile(async () => {
         <dd>${b}</dd>
       `).join('\n')}
     </dl>
-    <pre><code>${js}</code></pre>
+    <pre><code>${classedJs}</code></pre>
   </body>
 </html>
   `;
