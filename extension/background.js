@@ -61,7 +61,7 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
-const router = {};
+const Router = {};
 
 const Cache = {
   // used when you open a file to cache the content we got from the
@@ -147,7 +147,7 @@ const defineFile = (getData, setData) => ({
   }
 });
 
-router["/tabs/create"] = {
+Router["/tabs/create"] = {
   async write({buf}) {
     const url = buf.trim();
     await browser.tabs.create({url});
@@ -156,7 +156,7 @@ router["/tabs/create"] = {
   async truncate() { return {}; }
 };
 
-router["/tabs/by-id"] = {  
+Router["/tabs/by-id"] = {  
   async readdir() {
     const tabs = await browser.tabs.query({});
     return { entries: [".", "..", ...tabs.map(tab => String(tab.id))] };
@@ -176,21 +176,21 @@ router["/tabs/by-id"] = {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
-  router["/tabs/by-id/#TAB_ID/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
-  router["/tabs/by-id/#TAB_ID/title.txt"] = withTab(tab => tab.title + "\n");
-  router["/tabs/by-id/#TAB_ID/text.txt"] = fromScript(`document.body.innerText`);
-  router["/tabs/by-id/#TAB_ID/body.html"] = fromScript(`document.body.innerHTML`);
+  Router["/tabs/by-id/#TAB_ID/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
+  Router["/tabs/by-id/#TAB_ID/title.txt"] = withTab(tab => tab.title + "\n");
+  Router["/tabs/by-id/#TAB_ID/text.txt"] = fromScript(`document.body.innerText`);
+  Router["/tabs/by-id/#TAB_ID/body.html"] = fromScript(`document.body.innerHTML`);
 
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
-  router["/tabs/by-id/#TAB_ID/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
+  Router["/tabs/by-id/#TAB_ID/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
                                                  // WEIRD: we do startsWith because you might end up with buf
                                                  // being "truee" (if it was "false", then someone wrote "true")
                                                  buf => ({ active: buf.startsWith("true") }));
 })();
 (function() {
   const evals = {};
-  router["/tabs/by-id/#TAB_ID/evals"] = {
+  Router["/tabs/by-id/#TAB_ID/evals"] = {
     async readdir({path, tabId}) {
       return { entries: [".", "..",
                          ...Object.keys(evals[tabId] || {}),
@@ -204,7 +204,7 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
+  Router["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({tabId, filename, mode}) {
       evals[tabId] = evals[tabId] || {};
@@ -239,7 +239,7 @@ router["/tabs/by-id"] = {
 })();
 (function() {
   const watches = {};
-  router["/tabs/by-id/#TAB_ID/watches"] = {
+  Router["/tabs/by-id/#TAB_ID/watches"] = {
     async readdir({tabId}) {
       return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
     },
@@ -251,7 +251,7 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/#TAB_ID/watches/:EXPR"] = {
+  Router["/tabs/by-id/#TAB_ID/watches/:EXPR"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({tabId, expr, mode}) {
       watches[tabId] = watches[tabId] || {};
@@ -277,14 +277,14 @@ router["/tabs/by-id"] = {
   };
 })();
 
-router["/tabs/by-id/#TAB_ID/window"] = {
+Router["/tabs/by-id/#TAB_ID/window"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink({tabId}) {
     const tab = await browser.tabs.get(tabId);
     return { buf: "../../../windows/" + tab.windowId };
   }
 };
-router["/tabs/by-id/#TAB_ID/control"] = {
+Router["/tabs/by-id/#TAB_ID/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
   async write({tabId, buf}) {
     const command = buf.trim();
@@ -357,14 +357,14 @@ router["/tabs/by-id/#TAB_ID/control"] = {
   // resources/
   // TODO: scripts/ TODO: allow creation, eval immediately
 
-  router["/tabs/by-id/#TAB_ID/debugger/resources"] = {
+  Router["/tabs/by-id/#TAB_ID/debugger/resources"] = {
     async readdir({tabId}) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
       const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  router["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId}) => {
+  Router["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId}) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -381,7 +381,7 @@ router["/tabs/by-id/#TAB_ID/control"] = {
     }
     throw new UnixError(unix.ENOENT);
   });
-  router["/tabs/by-id/#TAB_ID/debugger/scripts"] = {
+  Router["/tabs/by-id/#TAB_ID/debugger/scripts"] = {
     async opendir({tabId}) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
       return { fh: 0 };
@@ -402,7 +402,7 @@ router["/tabs/by-id/#TAB_ID/control"] = {
     }
     return scriptInfo;
   }
-  router["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = defineFile(async ({tabId, filename}) => {
+  Router["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = defineFile(async ({tabId, filename}) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -419,7 +419,7 @@ router["/tabs/by-id/#TAB_ID/control"] = {
   });
 })();
 
-router["/tabs/by-id/#TAB_ID/inputs"] = {
+Router["/tabs/by-id/#TAB_ID/inputs"] = {
   async readdir({tabId}) {
     // TODO: assign new IDs to inputs without them?
     const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
@@ -428,7 +428,7 @@ router["/tabs/by-id/#TAB_ID/inputs"] = {
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({tabId, inputId}) => {
+Router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
@@ -439,7 +439,7 @@ router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({tabId, i
   await browser.tabs.executeScript(tabId, {code});
 });
 
-router["/tabs/by-title"] = {
+Router["/tabs/by-title"] = {
   getattr() {
     return {
       st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
@@ -452,7 +452,7 @@ router["/tabs/by-title"] = {
     return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "." + String(tab.id))] };
   }
 };
-router["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
+Router["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
   // TODO: date
   async readlink({tabId}) { // a symbolic link to /tabs/by-id/[id for this tab]
     return { buf: "../by-id/" + tabId };
@@ -462,7 +462,7 @@ router["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
     return {};
   }
 };
-router["/tabs/last-focused"] = {
+Router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
   async readlink() {
     const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
@@ -470,13 +470,13 @@ router["/tabs/last-focused"] = {
   }
 };
 
-router["/windows"] = {
+Router["/windows"] = {
   async readdir() {
     const windows = await browser.windows.getAll();
     return { entries: [".", "..", ...windows.map(window => String(window.id))] };
   }
 };
-router["/windows/last-focused"] = {
+Router["/windows/last-focused"] = {
   // a symbolic link to /windows/[id for this window]
   async readlink() {
     const windowId = (await browser.windows.getLastFocused()).id;
@@ -492,11 +492,11 @@ router["/windows/last-focused"] = {
     await browser.windows.update(windowId, writeHandler(buf));
   } : undefined);
 
-  router["/windows/#WINDOW_ID/focused"] =
+  Router["/windows/#WINDOW_ID/focused"] =
     withWindow(window => JSON.stringify(window.focused) + '\n',
                buf => ({ focused: buf.startsWith('true') }));
 })();
-router["/windows/#WINDOW_ID/visible-tab.png"] = { ...defineFile(async ({windowId}) => {
+Router["/windows/#WINDOW_ID/visible-tab.png"] = { ...defineFile(async ({windowId}) => {
   // screen capture is a window thing and not a tab thing because you
   // can only capture the visible tab for each window anyway; you
   // can't take a screenshot of just any arbitrary tab
@@ -513,13 +513,13 @@ router["/windows/#WINDOW_ID/visible-tab.png"] = { ...defineFile(async ({windowId
 } };
 
 
-router["/extensions"] = {  
+Router["/extensions"] = {  
   async readdir() {
     const infos = await browser.management.getAll();
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}.${info.id}`)] };
   }
 };
-router["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...defineFile(async ({extensionId}) => {
+Router["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...defineFile(async ({extensionId}) => {
   const info = await browser.management.get(extensionId);
   return String(info.enabled) + '\n';
 
@@ -529,21 +529,21 @@ router["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...defineFile(a
   // suppress truncate so it doesn't accidentally flip the state when you do, e.g., `echo true >`
 }), truncate() { return {}; } };
 
-router["/runtime/reload"] = {
+Router["/runtime/reload"] = {
   async write({buf}) {
     await browser.runtime.reload();
     return {size: stringToUtf8Array(buf).length};
   },
   truncate() { return {}; }
 };
-router["/runtime/background.js.html"] = defineFile(async () => {
+Router["/runtime/background.js.html"] = defineFile(async () => {
   const js = await window.fetch(chrome.runtime.getURL('background.js'))
                          .then(r => r.text());
   return `
 <html>
   <body>
     <dl>
-      ${Object.entries(router).map(([a, b]) => `
+      ${Object.entries(Router).map(([a, b]) => `
         <dt>${a}</dt>
         <dd>${b}</dd>
       `).join('\n')}
@@ -561,20 +561,20 @@ router["/runtime/background.js.html"] = defineFile(async () => {
 // one level at a time so you know (for each parent) what all the
 // children will be.
 for (let i = 10; i >= 0; i--) {
-  for (let path of Object.keys(router).filter(key => key.split("/").length === i)) {
+  for (let path of Object.keys(Router).filter(key => key.split("/").length === i)) {
     path = path.substr(0, path.lastIndexOf("/"));
     if (path == '') path = '/';
 
-    if (!router[path]) {
+    if (!Router[path]) {
       function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
       // find all direct children
-      let entries = Object.keys(router)
+      let entries = Object.keys(Router)
                           .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
                           .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
       entries = [".", "..", ...new Set(entries)];
 
-      router[path] = { readdir() { return { entries }; } };
+      Router[path] = { readdir() { return { entries }; } };
     }
   }
   // I also think it would be better to compute this stuff on the fly,
@@ -583,9 +583,9 @@ for (let i = 10; i >= 0; i--) {
 }
 
 
-for (let key in router) {
+for (let key in Router) {
   // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[0-9]+)\/url.txt
-  router[key].__regex = new RegExp(
+  Router[key].__regex = new RegExp(
     '^' + key
       .split('/')
       .map(keySegment => keySegment
@@ -596,8 +596,8 @@ for (let key in router) {
            }))
       .join('/') + '$');
 
-  router[key].__match = function(path) {
-    const result = router[key].__regex.exec(path);
+  Router[key].__match = function(path) {
+    const result = Router[key].__regex.exec(path);
     if (!result) { return; }
 
     const vars = {};
@@ -614,8 +614,8 @@ for (let key in router) {
   // Fill in default implementations of fs ops:
 
   // if readdir -> directory -> add getattr, opendir, releasedir
-  if (router[key].readdir) {
-    router[key] = {
+  if (Router[key].readdir) {
+    Router[key] = {
       getattr() { 
         return {
           st_mode: unix.S_IFDIR | 0755,
@@ -625,11 +625,11 @@ for (let key in router) {
       },
       opendir({path}) { return { fh: 0 }; },
       releasedir({path}) { return {}; },
-      ...router[key]
+      ...Router[key]
     };
 
-  } else if (router[key].readlink) {
-    router[key] = {
+  } else if (Router[key].readlink) {
+    Router[key] = {
       async getattr(req) {
         const st_size = (await this.readlink(req)).buf.length + 1;
         return {
@@ -639,21 +639,21 @@ for (let key in router) {
           st_size
         };
       },
-      ...router[key]
+      ...Router[key]
     };
     
-  } else if (router[key].read || router[key].write) {
-    router[key] = {
+  } else if (Router[key].read || Router[key].write) {
+    Router[key] = {
       async getattr() {
         return {
-          st_mode: unix.S_IFREG | ((router[key].read && 0444) | (router[key].write && 0222)),
+          st_mode: unix.S_IFREG | ((Router[key].read && 0444) | (Router[key].write && 0222)),
           st_nlink: 1,
           st_size: 100 // FIXME
         };
       },
       open() { return { fh: 0 }; },
       release() { return {}; },
-      ...router[key]
+      ...Router[key]
     };
   }
 }
@@ -664,7 +664,7 @@ function tryMatchRoute(path) {
     throw new UnixError(unix.ENOTSUP); 
   }
 
-  for (let route of Object.values(router)) {
+  for (let route of Object.values(Router)) {
     const vars = route.__match(path);
     if (vars) { return [route, vars]; }
   }
@@ -750,7 +750,7 @@ function tryConnect() {
 if (typeof process === 'object') {
   // we're running in node (as part of a test)
   // return everything they might want to test
-  module.exports = {router, tryMatchRoute}; 
+  module.exports = {Router, tryMatchRoute}; 
 
 } else {
   tryConnect();
