@@ -3,7 +3,7 @@ const assert = require('assert');
 // mock chrome namespace
 global.chrome = {};
 // run background.js
-const {router, findRoute} = require('../extension/background');
+const {router, tryMatchRoute} = require('../extension/background');
 
 (async () => {
   const tabRoute = await router['/tabs/by-id/#TAB_ID'].readdir();
@@ -15,7 +15,9 @@ const {router, findRoute} = require('../extension/background');
   assert.deepEqual(await router['/tabs'].readdir(),
                    { entries: ['.', '..', 'create',
                                'by-id', 'by-title', 'last-focused'] });
-  
-  assert.deepEqual(findRoute('/tabs/by-id/10/url.txt'),
-                   router['/tabs/by-id/#TAB_ID/url.txt']);
+
+  assert.deepEqual(tryMatchRoute('/'), [router['/'], {}]);
+
+  assert.deepEqual(tryMatchRoute('/tabs/by-id/10/url.txt'),
+                   [router['/tabs/by-id/#TAB_ID/url.txt'], {tabId: 10}]);
 })();

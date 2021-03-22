@@ -1,5 +1,3 @@
-const TESTING = (typeof chrome === 'undefined');
-
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -23,7 +21,6 @@ const unix = {
   // Open flags
   O_TRUNC: 01000,
 }
-
 class UnixError extends Error {
   constructor(error) { super(); this.name = "UnixError"; this.error = error; }
 }
@@ -68,61 +65,6 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
-
-async function attachDebugger(tabId) {
-  return new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
-    if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
-    else { resolve(); }
-  }));
-}
-async function detachDebugger(tabId) {
-  return new Promise((resolve, reject) => chrome.debugger.detach({tabId}, () => {
-    if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
-    else { resolve(); }
-  }));
-}
-const TabManager = (function() {
-  if (chrome.debugger) chrome.debugger.onEvent.addListener((source, method, params) => {
-    console.log(source, method, params);
-    if (method === "Page.frameStartedLoading") {
-      // we're gonna assume we're always plugged into both Page and Debugger.
-      TabManager.scriptsForTab[source.tabId] = {};
-
-    } else if (method === "Debugger.scriptParsed") {
-      TabManager.scriptsForTab[source.tabId] = TabManager.scriptsForTab[source.tabId] || {};
-      TabManager.scriptsForTab[source.tabId][params.scriptId] = params;
-    }
-  });
-
-  return {
-    scriptsForTab: {},
-    debugTab: async function(tabId) {
-      // meant to be higher-level wrapper for raw attach/detach
-      // TODO: could we remember if we're already attached? idk if it's worth it
-      try { await attachDebugger(tabId); }
-      catch (e) {
-        if (e.message.indexOf('Another debugger is already attached') !== -1) {
-          await detachDebugger(tabId);
-          await attachDebugger(tabId);
-        }
-      }
-      // TODO: detach automatically? some kind of reference counting thing?
-    },
-    enableDomainForTab: async function(tabId, domain) {
-      // TODO: could we remember if we're already enabled? idk if it's worth it
-      if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = {}; }
-      await sendDebuggerCommand(tabId, `${domain}.enable`, {});
-    }
-  };
-})();
-function sendDebuggerCommand(tabId, method, commandParams) {
-  return new Promise((resolve, reject) =>
-    chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
-      if (result) { resolve(result); } else { reject(chrome.runtime.lastError); }
-    })
-  );
-}
-
 const router = {};
 
 const Cache = {
@@ -151,33 +93,34 @@ const defineFile = (getData, setData) => ({
   // show up in ls, etc), given getData and setData functions that
   // define the contents of the entire file.
 
-  // getData: (path: String) -> Promise<contentsOfFile: String|Uint8Array>
-  // setData [optional]: (path: String, newContentsOfFile: String) -> Promise<>
+  // getData: (req: Request U Vars) -> Promise<contentsOfFile: String|Uint8Array>
+  // setData [optional]: (req: Request U Vars, newContentsOfFile: String) -> Promise<>
 
   // You can override file operations (like `truncate` or `getattr`)
   // in the returned set if you want different behavior from what's
   // defined here.
 
-  async getattr({path}) {
+  async getattr(req) {
     return {
       st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
       st_nlink: 1,
       // you'll want to override this if getData() is slow, because
       // getattr() gets called a lot more cavalierly than open().
-      st_size: toUtf8Array(await getData(path)).length
+      st_size: toUtf8Array(await getData(req)).length
     };
   },
 
   // We call getData() once when the file is opened, then cache that
   // data for all subsequent reads from that application.
-  async open({path, flags}) {
-    const data = !(flags & unix.O_TRUNC) ? await getData(path) : "";
+  async open(req) {
+    const data = !(req.flags & unix.O_TRUNC) ? await getData(req) : "";
     return { fh: Cache.storeObject(toUtf8Array(data)) };
   },
-  async read({path, fh, size, offset}) {
+  async read({fh, size, offset}) {
     return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
   },
-  async write({path, fh, offset, buf}) {
+  async write(req) {
+    const {fh, offset, buf} = req;
     let arr = Cache.getObjectForHandle(fh);
     const bufarr = stringToUtf8Array(buf);
     if (offset + bufarr.length > arr.length) {
@@ -190,7 +133,7 @@ const defineFile = (getData, setData) => ({
     // I guess caller should override write() if they want to actually
     // patch and not just re-set the whole string (for example,
     // if they want to hot-reload just one function the user modified)
-    await setData(path, utf8ArrayToString(arr)); return { size: bufarr.length };
+    await setData(req, utf8ArrayToString(arr)); return { size: bufarr.length };
   },
   async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
 
@@ -209,13 +152,13 @@ const defineFile = (getData, setData) => ({
 });
 
 router["/tabs/create"] = {
-  async write({path, buf}) {
+  async write({buf}) {
     const url = buf.trim();
     await browser.tabs.create({url});
     return {size: stringToUtf8Array(buf).length};
   },
-  async truncate({path, size}) { return {}; }
-}
+  async truncate() { return {}; }
+};
 
 router["/tabs/by-id"] = {  
   async readdir() {
@@ -225,17 +168,15 @@ router["/tabs/by-id"] = {
 };
 
 (function() {
-  const withTab = (readHandler, writeHandler) => defineFile(async path => {
-    const tabId = parseInt(pathComponent(path, -2));
+  const withTab = (readHandler, writeHandler) => defineFile(async ({tabId}) => {
     const tab = await browser.tabs.get(tabId);
     return readHandler(tab);
 
-  }, writeHandler ? async (path, buf) => {
-    const tabId = parseInt(pathComponent(path, -2));
+  }, writeHandler ? async ({tabId}, buf) => {
     await browser.tabs.update(tabId, writeHandler(buf));
   } : undefined);
-  const fromScript = code => defineFile(async path => {
-    const tabId = parseInt(pathComponent(path, -2));
+
+  const fromScript = code => defineFile(async ({tabId}) => {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
@@ -267,22 +208,19 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/#TAB_ID/evals/*"] = {
+  router["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
-    async mknod({path, mode}) {
-      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    async mknod({tabId, filename, mode}) {
       evals[tabId] = evals[tabId] || {};
-      evals[tabId][name] = { code: '' };
+      evals[tabId][filename] = { code: '' };
       return {};
     },
-    async unlink({path}) {
-      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-      delete evals[tabId][name]; // TODO: also delete evals[tabId] if empty
+    async unlink({tabId, filename}) {
+      delete evals[tabId][filename]; // TODO: also delete evals[tabId] if empty
       return {};
     },
 
-    ...defineFile(async path => {
-      const [tabId, filename] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    ...defineFile(async ({tabId, filename}) => {
       const name = filename.replace(/\.result$/, '');
       if (!evals[tabId] || !(name in evals[tabId])) { throw new UnixError(unix.ENOENT); }
 
@@ -291,12 +229,12 @@ router["/tabs/by-id"] = {
       } else {
         return evals[tabId][name].code;
       }
-    }, async (path, buf) => {
-      const [tabId, name] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
-      if (name.endsWith('.result')) {
-        // FIXME
+    }, async ({tabId, filename}, buf) => {
+      if (filename.endsWith('.result')) {
+        // FIXME: case where they try to write to .result file
 
       } else {
+        const name = filename;
         evals[tabId][name].code = buf;
         evals[tabId][name].result = JSON.stringify((await browser.tabs.executeScript(tabId, {code: buf}))[0]) + '\n';
       }
@@ -306,8 +244,7 @@ router["/tabs/by-id"] = {
 (function() {
   const watches = {};
   router["/tabs/by-id/#TAB_ID/watches"] = {
-    async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -2));
+    async readdir({tabId}) {
       return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
     },
     getattr() {
@@ -318,26 +255,24 @@ router["/tabs/by-id"] = {
       };
     },
   };
-  router["/tabs/by-id/#TAB_ID/watches/*"] = {
+  router["/tabs/by-id/#TAB_ID/watches/:EXPR"] = {
     // NOTE: eval runs in extension's content script, not in original page JS context
-    async mknod({path, mode}) {
-      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    async mknod({tabId, expr, mode}) {
       watches[tabId] = watches[tabId] || {};
       watches[tabId][expr] = async function() {
         return (await browser.tabs.executeScript(tabId, {code: expr}))[0];
       };
       return {};
     },
-    async unlink({path}) {
-      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    async unlink({tabId, expr}) {
       delete watches[tabId][expr]; // TODO: also delete watches[tabId] if empty
       return {};
     },
 
-    ...defineFile(async path => {
-      const [tabId, expr] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1)];
+    ...defineFile(async ({tabId, expr}) => {
       if (!watches[tabId] || !(expr in watches[tabId])) { throw new UnixError(unix.ENOENT); }
       return JSON.stringify(await watches[tabId][expr]()) + '\n';
+
     }, () => {
       // setData handler -- only providing this so that getattr reports
       // that the file is writable, so it can be deleted without annoying prompt.
@@ -348,40 +283,92 @@ router["/tabs/by-id"] = {
 
 router["/tabs/by-id/#TAB_ID/window"] = {
   // a symbolic link to /windows/[id for this window]
-  async readlink({path}) {
-    const tabId = parseInt(pathComponent(path, -2)); const tab = await browser.tabs.get(tabId);
+  async readlink({tabId}) {
+    const tab = await browser.tabs.get(tabId);
     return { buf: "../../../windows/" + tab.windowId };
   }
 };
 router["/tabs/by-id/#TAB_ID/control"] = {
   // echo remove > mnt/tabs/by-id/1644/control
-  async write({path, buf}) {
-    const tabId = parseInt(pathComponent(path, -2));
+  async write({tabId, buf}) {
     const command = buf.trim();
     // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
     // see https://developer.chrome.com/extensions/tabs
     await browser.tabs[command](tabId);
     return {size: stringToUtf8Array(buf).length};
   },
-  async truncate({path, size}) { return {}; }
+  async truncate({size}) { return {}; }
 };
 // debugger/ : debugger-API-dependent (Chrome-only)
 (function() {
   if (!chrome.debugger) return;
+
+  async function attachDebugger(tabId) {
+    return new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
+      if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
+      else { resolve(); }
+    }));
+  }
+  async function detachDebugger(tabId) {
+    return new Promise((resolve, reject) => chrome.debugger.detach({tabId}, () => {
+      if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
+      else { resolve(); }
+    }));
+  }
+  const TabManager = (function() {
+    if (chrome.debugger) chrome.debugger.onEvent.addListener((source, method, params) => {
+      console.log(source, method, params);
+      if (method === "Page.frameStartedLoading") {
+        // we're gonna assume we're always plugged into both Page and Debugger.
+        TabManager.scriptsForTab[source.tabId] = {};
+
+      } else if (method === "Debugger.scriptParsed") {
+        TabManager.scriptsForTab[source.tabId] = TabManager.scriptsForTab[source.tabId] || {};
+        TabManager.scriptsForTab[source.tabId][params.scriptId] = params;
+      }
+    });
+
+    return {
+      scriptsForTab: {},
+      debugTab: async function(tabId) {
+        // meant to be higher-level wrapper for raw attach/detach
+        // TODO: could we remember if we're already attached? idk if it's worth it
+        try { await attachDebugger(tabId); }
+        catch (e) {
+          if (e.message.indexOf('Another debugger is already attached') !== -1) {
+            await detachDebugger(tabId);
+            await attachDebugger(tabId);
+          }
+        }
+        // TODO: detach automatically? some kind of reference counting thing?
+      },
+      enableDomainForTab: async function(tabId, domain) {
+        // TODO: could we remember if we're already enabled? idk if it's worth it
+        if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = {}; }
+        await sendDebuggerCommand(tabId, `${domain}.enable`, {});
+      }
+    };
+  })();
+  function sendDebuggerCommand(tabId, method, commandParams) {
+    return new Promise((resolve, reject) =>
+      chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
+        if (result) { resolve(result); } else { reject(chrome.runtime.lastError); }
+      })
+    );
+  }
+
   // possible idea: console (using Log API instead of monkey-patching)
   // resources/
   // TODO: scripts/ TODO: allow creation, eval immediately
 
   router["/tabs/by-id/#TAB_ID/debugger/resources"] = {
-    async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -3));
+    async readdir({tabId}) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
       const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  router["/tabs/by-id/#TAB_ID/debugger/resources/*"] = defineFile(async path => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
+  router["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId}) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -399,15 +386,13 @@ router["/tabs/by-id/#TAB_ID/control"] = {
     throw new UnixError(unix.ENOENT);
   });
   router["/tabs/by-id/#TAB_ID/debugger/scripts"] = {
-    async opendir({path}) {
-      const tabId = parseInt(pathComponent(path, -3));
+    async opendir({tabId}) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
       return { fh: 0 };
     },
-    async readdir({path}) {
-      const tabId = parseInt(pathComponent(path, -3));
-      // it's useful to put the ID first so the .js extension stays on
-      // the end
+    async readdir({tabId}) {
+      // it's useful to put the ID first in the script filenames, so
+      // the .js extension stays on the end
       const scriptFileNames = Object.values(TabManager.scriptsForTab[tabId])
             .map(params => params.scriptId + "_" + sanitize(params.url));
       return { entries: [".", "..", ...scriptFileNames] };
@@ -421,8 +406,7 @@ router["/tabs/by-id/#TAB_ID/control"] = {
     }
     return scriptInfo;
   }
-  router["/tabs/by-id/#TAB_ID/debugger/scripts/*"] = defineFile(async path => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
+  router["/tabs/by-id/#TAB_ID/debugger/scripts/:SUFFIX"] = defineFile(async ({path, tabId, suffix}) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -431,8 +415,7 @@ router["/tabs/by-id/#TAB_ID/control"] = {
     const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
     return scriptSource;
 
-  }, async (path, buf) => {
-    const [tabId, suffix] = [parseInt(pathComponent(path, -4)), pathComponent(path, -1)];
+  }, async ({path, tabId, suffix}, buf) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
     const {scriptId} = pathScriptInfo(tabId, path);
@@ -450,14 +433,13 @@ router["/tabs/by-id/#TAB_ID/inputs"] = {
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-router["/tabs/by-id/#TAB_ID/inputs/*"] = defineFile(async path => {
-  const [tabId, inputId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({path, tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
   return inputValue;
-}, async (path, buf) => {
-  const [tabId, inputId] = [parseInt(pathComponent(path, -3)), pathComponent(path, -1).slice(0, -4)];
+
+}, async ({path, tabId, inputId}, buf) => {
   const code = `document.getElementById('${inputId}').value = unescape('${escape(buf)}')`;
   await browser.tabs.executeScript(tabId, {code});
 });
@@ -472,24 +454,22 @@ router["/tabs/by-title"] = {
   },
   async readdir() {
     const tabs = await browser.tabs.query({});
-    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "_" + String(tab.id))] };
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "." + String(tab.id))] };
   }
 };
-router["/tabs/by-title/*"] = {
+router["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
   // TODO: date
-  async readlink({path}) { // a symbolic link to /tabs/by-id/[id for this tab]
-    const parts = path.split("_"); const tabId = parts[parts.length - 1];
+  async readlink({tabId}) { // a symbolic link to /tabs/by-id/[id for this tab]
     return { buf: "../by-id/" + tabId };
   },
-  async unlink({path}) { // you can delete a by-title/TAB to close that tab
-    const parts = path.split("_"); const tabId = parseInt(parts[parts.length - 1]);
+  async unlink({tabId}) { // you can delete a by-title/TAB to close that tab
     await browser.tabs.remove(tabId);
     return {};
   }
 };
 router["/tabs/last-focused"] = {
   // a symbolic link to /tabs/by-id/[id for this tab]
-  async readlink({path}) {
+  async readlink() {
     const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
     return { buf: "by-id/" + id };
   }
@@ -503,35 +483,33 @@ router["/windows"] = {
 };
 router["/windows/last-focused"] = {
   // a symbolic link to /windows/[id for this window]
-  async readlink({path}) {
+  async readlink() {
     const windowId = (await browser.windows.getLastFocused()).id;
     return { buf: windowId };
   }
 };
 (function() {
-  const withWindow = (readHandler, writeHandler) => defineFile(async path => {
-    const windowId = parseInt(pathComponent(path, -2));
+  const withWindow = (readHandler, writeHandler) => defineFile(async ({windowId}) => {
     const window = await browser.windows.get(windowId);
     return readHandler(window);
 
-  }, writeHandler ? async (path, buf) => {
-    const windowId = parseInt(pathComponent(path, -2));
+  }, writeHandler ? async ({windowId}, buf) => {
     await browser.windows.update(windowId, writeHandler(buf));
   } : undefined);
 
-  router["/windows/*/focused"] = withWindow(window => JSON.stringify(window.focused) + '\n',
-                                            buf => ({ focused: buf.startsWith('true') }));
+  router["/windows/#WINDOW_ID/focused"] =
+    withWindow(window => JSON.stringify(window.focused) + '\n',
+               buf => ({ focused: buf.startsWith('true') }));
 })();
-router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
+router["/windows/#WINDOW_ID/visible-tab.png"] = { ...defineFile(async ({windowId}) => {
   // screen capture is a window thing and not a tab thing because you
   // can only capture the visible tab for each window anyway; you
   // can't take a screenshot of just any arbitrary tab
-  const windowId = parseInt(pathComponent(path, -2));
   const dataUrl = await browser.tabs.captureVisibleTab(windowId, {format: 'png'});
   return Uint8Array.from(atob(dataUrl.substr(("data:image/png;base64,").length)),
                          c => c.charCodeAt(0));
 
-}), async getattr({path}) {
+}), async getattr() {
   return {
     st_mode: unix.S_IFREG | 0444,
     st_nlink: 1,
@@ -543,29 +521,27 @@ router["/windows/*/visible-tab.png"] = { ...defineFile(async path => {
 router["/extensions"] = {  
   async readdir() {
     const infos = await browser.management.getAll();
-    return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}_${info.id}`)] };
+    return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}.${info.id}`)] };
   }
 };
-router["/extensions/*/enabled"] = { ...defineFile(async path => {
-  const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
+router["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...defineFile(async ({extensionId}) => {
   const info = await browser.management.get(extensionId);
   return String(info.enabled) + '\n';
 
-}, async (path, buf) => {
-  const parts = pathComponent(path, -2).split('_'); const extensionId = parts[parts.length - 1];
+}, async ({extensionId}, buf) => {
   await browser.management.setEnabled(extensionId, buf.trim() === "true");
 
   // suppress truncate so it doesn't accidentally flip the state when you do, e.g., `echo true >`
 }), truncate() { return {}; } };
 
 router["/runtime/reload"] = {
-  async write({path, buf}) {
+  async write({buf}) {
     await browser.runtime.reload();
     return {size: stringToUtf8Array(buf).length};
   },
   truncate() { return {}; }
 };
-router["/runtime/background.js.html"] = defineFile(async path => {
+router["/runtime/background.js.html"] = defineFile(async () => {
   const js = await window.fetch(chrome.runtime.getURL('background.js'))
                          .then(r => r.text());
   return `
@@ -613,14 +589,15 @@ for (let i = 10; i >= 0; i--) {
 
 
 for (let key in router) {
-  // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[^/]+)\/url.txt
+  // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[0-9]+)\/url.txt
   router[key].__regex = new RegExp(
     '^' + key
       .split('/')
       .map(keySegment => keySegment
            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
            .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
-             return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>[^/]+)`;
+             return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>` +
+                         (sigil === '#' ? '[0-9]+' : '[^/]+') + `)`;
            }))
       .join('/') + '$');
 
@@ -629,7 +606,7 @@ for (let key in router) {
     if (!result) { return; }
 
     const vars = {};
-    for (let [typeAndVarName, value] of Object.entries(result.groups)) {
+    for (let [typeAndVarName, value] of Object.entries(result.groups || {})) {
       let [type_, varName] = typeAndVarName.split('$');
       // TAB_ID -> tabId
       varName = varName.toLowerCase();
@@ -658,8 +635,8 @@ for (let key in router) {
 
   } else if (router[key].readlink) {
     router[key] = {
-      async getattr({path}) {
-        const st_size = (await this.readlink({path})).buf.length + 1;
+      async getattr(req) {
+        const st_size = (await this.readlink(req)).buf.length + 1;
         return {
           st_mode: unix.S_IFLNK | 0444,
           st_nlink: 1,
@@ -686,13 +663,15 @@ for (let key in router) {
   }
 }
 
-function findRoute(path) {
+function tryMatchRoute(path) {
   if (path.match(/\/\._[^\/]+$/)) {
-    throw new UnixError(unix.ENOTSUP); // Apple Double file for xattrs
+    // Apple Double ._whatever file for xattrs
+    throw new UnixError(unix.ENOTSUP); 
   }
 
   for (let route of Object.values(router)) {
-    if (route.__match(path)) { return route; }
+    const vars = route.__match(path);
+    if (vars) { return [route, vars]; }
   }
   throw new UnixError(unix.ENOENT);
 }
@@ -712,7 +691,8 @@ async function onMessage(req) {
 
   /* console.time(req.op + ':' + req.path);*/
   try {
-    response = await findRoute(req.path)[req.op](req);
+    const [route, vars] = tryMatchRoute(req.path);
+    response = await route[req.op]({...req, ...vars});
     response.op = req.op;
     if (response.buf) { response.buf = btoa(response.buf); }
 
@@ -775,7 +755,7 @@ function tryConnect() {
 if (typeof process === 'object') {
   // we're running in node (as part of a test)
   // return everything they might want to test
-  module.exports = {router, findRoute}; 
+  module.exports = {router, tryMatchRoute}; 
 
 } else {
   tryConnect();
