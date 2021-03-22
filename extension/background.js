@@ -25,10 +25,6 @@ class UnixError extends Error {
   constructor(error) { super(); this.name = "UnixError"; this.error = error; }
 }
 
-function pathComponent(path, i) {
-  const components = path.split('/');
-  return components[i >= 0 ? i : components.length + i];
-}
 const sanitize = (function() {
   // from https://github.com/parshap/node-sanitize-filename/blob/209c39b914c8eb48ee27bcbde64b2c7822fdf3de/index.js
 
@@ -398,34 +394,33 @@ router["/tabs/by-id/#TAB_ID/control"] = {
       return { entries: [".", "..", ...scriptFileNames] };
     }
   };
-  function pathScriptInfo(tabId, path) {
-    const [scriptId, ...rest] = pathComponent(path, -1).split("_");
+  function pathScriptInfo(tabId, filename) {
+    const [scriptId, ...rest] = filename.split("_");
     const scriptInfo = TabManager.scriptsForTab[tabId][scriptId];
     if (!scriptInfo || sanitize(scriptInfo.url) !== rest.join("_")) {
       throw new UnixError(unix.ENOENT);
     }
     return scriptInfo;
   }
-  router["/tabs/by-id/#TAB_ID/debugger/scripts/:SUFFIX"] = defineFile(async ({path, tabId, suffix}) => {
+  router["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = defineFile(async ({tabId, filename}) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const {scriptId} = pathScriptInfo(tabId, path);
+    const {scriptId} = pathScriptInfo(tabId, filename);
     const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
     return scriptSource;
 
-  }, async ({path, tabId, suffix}, buf) => {
+  }, async ({tabId, filename}, buf) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const {scriptId} = pathScriptInfo(tabId, path);
+    const {scriptId} = pathScriptInfo(tabId, filename);
     await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
   });
 })();
 
 router["/tabs/by-id/#TAB_ID/inputs"] = {
-  async readdir({path}) {
-    const tabId = parseInt(pathComponent(path, -2));
+  async readdir({tabId}) {
     // TODO: assign new IDs to inputs without them?
     const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
                     .map(e => e.id).filter(id => id)`;
@@ -433,13 +428,13 @@ router["/tabs/by-id/#TAB_ID/inputs"] = {
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({path, tabId, inputId}) => {
+router["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
   return inputValue;
 
-}, async ({path, tabId, inputId}, buf) => {
+}, async ({tabId, inputId}, buf) => {
   const code = `document.getElementById('${inputId}').value = unescape('${escape(buf)}')`;
   await browser.tabs.executeScript(tabId, {code});
 });
