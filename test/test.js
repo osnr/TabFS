@@ -3,21 +3,21 @@ const assert = require('assert');
 // mock chrome namespace
 global.chrome = {};
 // run background.js
-const {Router, tryMatchRoute} = require('../extension/background');
+const {Routes, tryMatchRoute} = require('../extension/background');
 
 (async () => {
-  const tabRoute = await Router['/tabs/by-id/#TAB_ID'].readdir();
+  const tabRoute = await Routes['/tabs/by-id/#TAB_ID'].readdir();
   assert(['.', '..', 'url.txt', 'title.txt', 'text.txt']
     .every(file => tabRoute.entries.includes(file)));
 
-  assert.deepEqual(await Router['/'].readdir(),
+  assert.deepEqual(await Routes['/'].readdir(),
                    { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
-  assert.deepEqual(await Router['/tabs'].readdir(),
+  assert.deepEqual(await Routes['/tabs'].readdir(),
                    { entries: ['.', '..', 'create',
                                'by-id', 'by-title', 'last-focused'] });
 
-  assert.deepEqual(tryMatchRoute('/'), [Router['/'], {}]);
+  assert.deepEqual(tryMatchRoute('/'), [Routes['/'], {}]);
 
   assert.deepEqual(tryMatchRoute('/tabs/by-id/10/url.txt'),
-                   [Router['/tabs/by-id/#TAB_ID/url.txt'], {tabId: 10}]);
+                   [Routes['/tabs/by-id/#TAB_ID/url.txt'], {tabId: 10}]);
 })();
