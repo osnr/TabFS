@@ -546,7 +546,7 @@ Router["/runtime/background.js.html"] = defineFile(async () => {
 
   const classedJs =
     js.split('\n')
-        .map(line => {
+        .map((line, i) => {
           const class_ = classes.find(([re, class_]) => re.test(line));
           line = line
             .replace(/&/g, "&amp;")
@@ -554,27 +554,69 @@ Router["/runtime/background.js.html"] = defineFile(async () => {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
-          if (!class_) { return `<span>${line}</span>`; }
-          return `<span class="${class_[1]}">${line}</span>`;
+          if (!class_) { return `<div class="normal line">${line}</div>`; }
+          return `<div class="${class_[1]} line">${line}</div>`;
         })
-        .join('\n');
+        .join('');
 
   return `
 <html>
   <head>
     <style>
-      .route { background-color: red; }
-      span:not(.route) { height: 0px; }
+      body { overflow-x: hidden; }
+      .route { background-color: rgb(255, 196, 196); }
+      .line { position: absolute; height: 15px; width: 100%; }
+      .line { transition: height 0.5s cubic-bezier(0.64, 0.08, 0.24, 1), transform 0.5s cubic-bezier(0.64, 0.08, 0.24, 1); }
     </style>
   </head>
   <body>
-    <dl>
+    <!-- <dl>
       ${Object.entries(Router).map(([a, b]) => `
         <dt>${a}</dt>
         <dd>${b}</dd>
       `).join('\n')}
-    </dl>
+    </dl> -->
     <pre><code>${classedJs}</code></pre>
+   
+    <script>
+      const lines = [...document.querySelectorAll('div.line')];
+      function render() {
+        let y = 0;
+        for (let line of lines) {
+          if (line.classList.contains('route') || line.dataset.expand == 'true') {
+            line.style.height = '15px';
+            line.style.transform = 'translate(0px, ' + y + 'px)';
+            y += 15;
+
+          } else {
+            line.style.height = '15px';
+            line.style.transform = 'translate(0px, ' + (y - 7.5) + 'px) scaleY(' + 2/15 + ')';
+            y += 2;
+          }
+        }
+      }
+      render();
+
+      for (let line of lines) {
+        function treatNeighborLines(line, expand) {
+          let neighborLine = line;
+          while (neighborLine && !neighborLine.classList.contains('route')) {
+            neighborLine.dataset.expand = expand;
+            neighborLine = neighborLine.nextElementSibling;
+          }
+          neighborLine = line;
+          while (neighborLine && !neighborLine.classList.contains('route')) {
+            neighborLine.dataset.expand = expand;
+            neighborLine = neighborLine.previousElementSibling;
+          }
+          render();
+        }
+        line.onmousedown = () => {
+          treatNeighborLines(line, true);
+          document.body.onmouseup = () => { treatNeighborLines(line, false); };
+        };
+      }
+    </script>
   </body>
 </html>
   `;
