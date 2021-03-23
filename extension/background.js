@@ -364,7 +364,7 @@ Router["/tabs/by-id/#TAB_ID/control"] = {
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  Router["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId}) => {
+  Router["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId, suffix}) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
