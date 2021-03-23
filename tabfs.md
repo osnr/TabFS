@@ -24,9 +24,8 @@ mounts your browser tabs as a filesystem on your computer.
 Out of the box, it supports Chrome and (to a lesser extent[^firefox])
 Firefox and Safari, on macOS and Linux.[^otherbrowsers]
 
-(**update**: You can now **[sponsor further development of
-TabFS](https://github.com/sponsors/osnr)** and help to turn it from an
-experiment into something really reliable and useful!)
+(**update**: You can now **[sponsor me to help support further
+development of TabFS](https://github.com/sponsors/osnr)** :-)
 
 [^firefox]: because of the absence of the [chrome.debugger API for
     extensions](https://developer.chrome.com/docs/extensions/reference/debugger/).
@@ -58,9 +57,9 @@ state of that tab in your browser. (TODO: update as I add more)
 <video autoplay loop muted>
   <source src="doc/finder-contents.mp4" type="video/mp4">
 </video>
-<p class="caption">Example: the url.txt, text.txt, and title.txt
-files inside a tab's folder, which tell me those live properties
-for that tab</p>
+<p class="caption">Going through the files inside a tab's folder. For
+example, the url.txt, text.txt, and title.txt files tell me those live
+properties of this tab</p>
 </div>
 
 This gives you a _ton_ of power, because now you can apply [all the
@@ -165,7 +164,7 @@ could do in the first place)
 $ cat mnt/tabs/by-id/*/text.txt > text-of-all-tabs.txt
 ```
 
-### Evaluate JavaScript on a page: [demo](https://twitter.com/rsnous/status/1364008241588363264)
+### Evaluate JavaScript on a page / watch expressions: [demo](https://twitter.com/rsnous/status/1364008241588363264)
 
 (was `evals` in linked demo, is now renamed to `watches`)
 
@@ -178,6 +177,19 @@ $ touch mnt/tabs/last-focused/watches/'2 + 2'
 $ cat mnt/tabs/last-focused/watches/'2 + 2'
 4
 ```
+
+```
+$ touch mnt/tabs/last-focused/watches/window.scrollY
+```
+
+Now you can `cat window.scrollY` and see where you are scrolled on the
+page at any time.
+
+Could make an [ad-hoc
+dashboard](https://twitter.com/rsnous/status/1080878682275803137)
+around a Web page: a bunch of terminal windows floating around your
+screen, each sitting in a loop and using `cat` to monitor a different
+variable.
 
 ### Get images / scripts / other resource files from page
 
@@ -242,21 +254,6 @@ watcher that you're not sure if it's working
 also. I like the idea of being able to put arbitrary files anywhere in
 the subtree, actually, because then you could use git and emacs
 autosave and stuff for free... hmm)
-
-### TODO: Watch expressions
-
-```
-$ touch mnt/tabs/last-focused/watches/window.scrollY
-```
-
-Now you can `cat window.scrollY` and see where you are scrolled on the
-page at any time.
-
-Could make an [ad-hoc
-dashboard](https://twitter.com/rsnous/status/1080878682275803137)
-around a Web page: a bunch of terminal windows floating around your
-screen, each sitting in a loop and using `cat` to monitor a different
-variable.
 
 ### TODO: Import data (JSON? XLS? JS?)
 
