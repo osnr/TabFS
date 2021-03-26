@@ -61,89 +61,93 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
-const Cache = {
-  // used when you open a file to cache the content we got from the
-  // browser until you close that file. (so we can respond to
-  // individual chunk read() and write() requests without doing a
-  // whole new conversation with the browser and regenerating the
-  // content -- important for taking a screenshot, for instance)
-  store: {}, nextHandle: 0,
-  storeObject(object) {
-    const handle = ++this.nextHandle;
-    this.store[handle] = object;
-    return handle;
-  },
-  getObjectForHandle(handle) { return this.store[handle]; },
-  setObjectForHandle(handle, object) { this.store[handle] = object; },
-  removeObjectForHandle(handle) { delete this.store[handle]; }
-};
-function toUtf8Array(stringOrArray) {
-  if (typeof stringOrArray == 'string') { return stringToUtf8Array(stringOrArray); }
-  else { return stringOrArray; }
-}
-const defineFile = (getData, setData) => ({
-  // Generates a full set of file operations (so clients can read and
-  // write sections of the file, stat it to get its size and see it
-  // show up in ls, etc), given getData and setData functions that
-  // define the contents of the entire file.
+// Helper function: generates a full set of file operations that you
+// can use as a route handler (so clients can read and write
+// sections of the file, stat it to get its size and see it show up
+// in ls, etc), given getData and setData functions that define the
+// contents of the entire file.
+const defineFile = (function() {
+  const Cache = {
+    // used when you open a file to cache the content we got from the
+    // browser until you close that file. (so we can respond to
+    // individual chunk read() and write() requests without doing a
+    // whole new conversation with the browser and regenerating the
+    // content -- important for taking a screenshot, for instance)
+    store: {}, nextHandle: 0,
+    storeObject(object) {
+      const handle = ++this.nextHandle;
+      this.store[handle] = object;
+      return handle;
+    },
+    getObjectForHandle(handle) { return this.store[handle]; },
+    setObjectForHandle(handle, object) { this.store[handle] = object; },
+    removeObjectForHandle(handle) { delete this.store[handle]; }
+  };
 
-  // getData: (req: Request U Vars) -> Promise<contentsOfFile: String|Uint8Array>
-  // setData [optional]: (req: Request U Vars, newContentsOfFile: String) -> Promise<>
-
-  // You can override file operations (like `truncate` or `getattr`)
-  // in the returned set if you want different behavior from what's
-  // defined here.
-
-  async getattr(req) {
-    return {
-      st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
-      st_nlink: 1,
-      // you'll want to override this if getData() is slow, because
-      // getattr() gets called a lot more cavalierly than open().
-      st_size: toUtf8Array(await getData(req)).length
-    };
-  },
-
-  // We call getData() once when the file is opened, then cache that
-  // data for all subsequent reads from that application.
-  async open(req) {
-    const data = !(req.flags & unix.O_TRUNC) ? await getData(req) : "";
-    return { fh: Cache.storeObject(toUtf8Array(data)) };
-  },
-  async read({fh, size, offset}) {
-    return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
-  },
-  async write(req) {
-    const {fh, offset, buf} = req;
-    let arr = Cache.getObjectForHandle(fh);
-    const bufarr = stringToUtf8Array(buf);
-    if (offset + bufarr.length > arr.length) {
-      const newArr = new Uint8Array(offset + bufarr.length);
-      newArr.set(arr.slice(0, Math.min(offset, arr.length)));
-      arr = newArr;
-      Cache.setObjectForHandle(fh, arr);
-    }
-    arr.set(bufarr, offset);
-    // I guess caller should override write() if they want to actually
-    // patch and not just re-set the whole string (for example,
-    // if they want to hot-reload just one function the user modified)
-    await setData(req, utf8ArrayToString(arr)); return { size: bufarr.length };
-  },
-  async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
-
-  async truncate({path, size}) {
-    // TODO: weird case if they truncate while the file is open
-    // (but `echo hi > foo.txt`, the main thing I care about, uses
-    // O_TRUNC which thankfully doesn't do that)
-    let arr = toUtf8Array(await getData(path));
-    if (size !== arr.length) {
-      const newArr = new Uint8Array(size);
-      newArr.set(arr.slice(0, Math.min(size, arr.length)));
-      arr = newArr;
-    }
-    await setData(path, utf8ArrayToString(arr)); return {};
+  function toUtf8Array(stringOrArray) {
+    if (typeof stringOrArray == 'string') { return stringToUtf8Array(stringOrArray); }
+    else { return stringOrArray; }
   }
-});
+
+  return (getData, setData) => ({
+    // getData: (req: Request U Vars) -> Promise<contentsOfFile: String|Uint8Array>
+    // setData [optional]: (req: Request U Vars, newContentsOfFile: String) -> Promise<>
+
+    // You can override file operations (like `truncate` or `getattr`)
+    // in the returned set if you want different behavior from what's
+    // defined here.
+
+    async getattr(req) {
+      return {
+        st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
+        st_nlink: 1,
+        // you'll want to override this if getData() is slow, because
+        // getattr() gets called a lot more cavalierly than open().
+        st_size: toUtf8Array(await getData(req)).length
+      };
+    },
+
+    // We call getData() once when the file is opened, then cache that
+    // data for all subsequent reads from that application.
+    async open(req) {
+      const data = !(req.flags & unix.O_TRUNC) ? await getData(req) : "";
+      return { fh: Cache.storeObject(toUtf8Array(data)) };
+    },
+    async read({fh, size, offset}) {
+      return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
+    },
+    async write(req) {
+      const {fh, offset, buf} = req;
+      let arr = Cache.getObjectForHandle(fh);
+      const bufarr = stringToUtf8Array(buf);
+      if (offset + bufarr.length > arr.length) {
+        const newArr = new Uint8Array(offset + bufarr.length);
+        newArr.set(arr.slice(0, Math.min(offset, arr.length)));
+        arr = newArr;
+        Cache.setObjectForHandle(fh, arr);
+      }
+      arr.set(bufarr, offset);
+      // I guess caller should override write() if they want to actually
+      // patch and not just re-set the whole string (for example,
+      // if they want to hot-reload just one function the user modified)
+      await setData(req, utf8ArrayToString(arr)); return { size: bufarr.length };
+    },
+    async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
+
+    async truncate(req) {
+      // TODO: weird case if they truncate while the file is open
+      // (but `echo hi > foo.txt`, the main thing I care about, uses
+      // O_TRUNC which thankfully doesn't do that)
+      let arr = toUtf8Array(await getData(req));
+      if (req.size !== arr.length) {
+        const newArr = new Uint8Array(req.size);
+        newArr.set(arr.slice(0, Math.min(req.size, arr.length)));
+        arr = newArr;
+      }
+      await setData(req, utf8ArrayToString(arr)); return {};
+    }
+  });
+})();
 
 const Routes = {};
 
@@ -183,10 +187,12 @@ Routes["/tabs/by-id"] = {
 
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
-  Routes["/tabs/by-id/#TAB_ID/active"] = withTab(tab => JSON.stringify(tab.active) + '\n',
-                                                 // WEIRD: we do startsWith because you might end up with buf
-                                                 // being "truee" (if it was "false", then someone wrote "true")
-                                                 buf => ({ active: buf.startsWith("true") }));
+  Routes["/tabs/by-id/#TAB_ID/active"] = withTab(
+    tab => JSON.stringify(tab.active) + '\n',
+    // WEIRD: we do startsWith because you might end up with buf
+    // being "truee" (if it was "false", then someone wrote "true")
+    buf => ({ active: buf.startsWith("true") })
+  );
 })();
 (function() {
   const evals = {};
