@@ -17,9 +17,6 @@ const unix = {
   S_IFREG: 0100000, // regular
   S_IFLNK: 0120000, // symbolic link
   S_IFSOCK: 0140000, // socket
-
-  // Open flags
-  O_TRUNC: 01000,
 }
 class UnixError extends Error {
   constructor(error) { super(); this.name = "UnixError"; this.error = error; }
@@ -74,14 +71,21 @@ const defineFile = (function() {
     // whole new conversation with the browser and regenerating the
     // content -- important for taking a screenshot, for instance)
     store: {}, nextHandle: 0,
-    storeObject(object) {
+    storeObject(path, object) {
       const handle = ++this.nextHandle;
-      this.store[handle] = object;
+      this.store[handle] = {path, object};
       return handle;
     },
-    getObjectForHandle(handle) { return this.store[handle]; },
-    setObjectForHandle(handle, object) { this.store[handle] = object; },
-    removeObjectForHandle(handle) { delete this.store[handle]; }
+    getObjectForHandle(handle) { return this.store[handle].object; },
+    setObjectForHandle(handle, object) { this.store[handle].object = object; },
+    removeObjectForHandle(handle) { delete this.store[handle]; },
+    setObjectForPath(path, object) {
+      for (let storedObject of Object.values(this.store)) {
+        if (storedObject.path === path) {
+          storedObject.object = object;
+        }
+      }
+    }
   };
 
   function toUtf8Array(stringOrArray) {
@@ -110,11 +114,11 @@ const defineFile = (function() {
     // We call getData() once when the file is opened, then cache that
     // data for all subsequent reads from that application.
     async open(req) {
-      const data = !(req.flags & unix.O_TRUNC) ? await getData(req) : "";
-      return { fh: Cache.storeObject(toUtf8Array(data)) };
+      const data = await getData(req);
+      return { fh: Cache.storeObject(req.path, toUtf8Array(data)) };
     },
     async read({fh, size, offset}) {
-      return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) }
+      return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) };
     },
     async write(req) {
       const {fh, offset, buf} = req;
@@ -135,15 +139,13 @@ const defineFile = (function() {
     async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
 
     async truncate(req) {
-      // TODO: weird case if they truncate while the file is open
-      // (but `echo hi > foo.txt`, the main thing I care about, uses
-      // O_TRUNC which thankfully doesn't do that)
       let arr = toUtf8Array(await getData(req));
       if (req.size !== arr.length) {
         const newArr = new Uint8Array(req.size);
         newArr.set(arr.slice(0, Math.min(req.size, arr.length)));
         arr = newArr;
       }
+      Cache.setObjectForPath(req.path, arr);
       await setData(req, utf8ArrayToString(arr)); return {};
     }
   });
