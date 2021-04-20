@@ -63,7 +63,7 @@ const utf8ArrayToString = (function() {
 // sections of the file, stat it to get its size and see it show up
 // in ls, etc), given getData and setData functions that define the
 // contents of the entire file.
-const defineFile = (function() {
+const routeWithContents = (function() {
   const Cache = {
     // used when you open a file to cache the content we got from the
     // browser until you close that file. (so we can respond to
@@ -93,7 +93,7 @@ const defineFile = (function() {
     else { return stringOrArray; }
   }
 
-  return (getData, setData) => ({
+  const routeWithContents = (getData, setData) => ({
     // getData: (req: Request U Vars) -> Promise<contentsOfFile: String|Uint8Array>
     // setData [optional]: (req: Request U Vars, newContentsOfFile: String) -> Promise<>
 
@@ -149,6 +149,8 @@ const defineFile = (function() {
       await setData(req, utf8ArrayToString(arr)); return {};
     }
   });
+  routeWithContents.Cache = Cache;
+  return routeWithContents;
 })();
 
 const Routes = {};
@@ -172,7 +174,7 @@ Routes["/tabs/by-id"] = {
 };
 
 (function() {
-  const routeForTab = (readHandler, writeHandler) => defineFile(async ({tabId}) => {
+  const routeForTab = (readHandler, writeHandler) => routeWithContents(async ({tabId}) => {
     const tab = await browser.tabs.get(tabId);
     return readHandler(tab);
 
@@ -180,7 +182,7 @@ Routes["/tabs/by-id"] = {
     await browser.tabs.update(tabId, writeHandler(buf));
   } : undefined);
 
-  const routeFromScript = code => defineFile(async ({tabId}) => {
+  const routeFromScript = code => routeWithContents(async ({tabId}) => {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
@@ -248,7 +250,7 @@ Routes["/tabs/by-id"] = {
       return {};
     },
 
-    ...defineFile(async ({tabId, filename}) => {
+    ...routeWithContents(async ({tabId, filename}) => {
       const name = filename.replace(/\.result$/, '');
       if (!evals[tabId] || !(name in evals[tabId])) { throw new UnixError(unix.ENOENT); }
 
@@ -297,7 +299,7 @@ Routes["/tabs/by-id"] = {
       return {};
     },
 
-    ...defineFile(async ({tabId, expr}) => {
+    ...routeWithContents(async ({tabId, expr}) => {
       if (!watches[tabId] || !(expr in watches[tabId])) { throw new UnixError(unix.ENOENT); }
       return JSON.stringify(await watches[tabId][expr]()) + '\n';
 
@@ -396,7 +398,7 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = defineFile(async ({path, tabId, suffix}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = routeWithContents(async ({path, tabId, suffix}) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -434,7 +436,7 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
     }
     return scriptInfo;
   }
-  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = defineFile(async ({tabId, filename}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = routeWithContents(async ({tabId, filename}) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -460,7 +462,7 @@ Routes["/tabs/by-id/#TAB_ID/inputs"] = {
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = defineFile(async ({tabId, inputId}) => {
+Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = routeWithContents(async ({tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
@@ -516,7 +518,7 @@ Routes["/windows/last-focused"] = {
   }
 };
 (function() {
-  const withWindow = (readHandler, writeHandler) => defineFile(async ({windowId}) => {
+  const withWindow = (readHandler, writeHandler) => routeWithContents(async ({windowId}) => {
     const window = await browser.windows.get(windowId);
     return readHandler(window);
 
@@ -528,7 +530,7 @@ Routes["/windows/last-focused"] = {
     withWindow(window => JSON.stringify(window.focused) + '\n',
                buf => ({ focused: buf.startsWith('true') }));
 })();
-Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...defineFile(async ({windowId}) => {
+Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...routeWithContents(async ({windowId}) => {
   // screen capture is a window thing and not a tab thing because you
   // can only capture the visible tab for each window anyway; you
   // can't take a screenshot of just any arbitrary tab
@@ -551,7 +553,7 @@ Routes["/extensions"] = {
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}.${info.id}`)] };
   }
 };
-Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...defineFile(async ({extensionId}) => {
+Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...routeWithContents(async ({extensionId}) => {
   const info = await browser.management.get(extensionId);
   return String(info.enabled) + '\n';
 
@@ -568,6 +570,120 @@ Routes["/runtime/reload"] = {
   },
   truncate() { return {}; }
 };
+
+// added at first to make development on Safari less painful: Safari
+// normally requires you to recompile the whole Xcode project to
+// deploy any update to background.js.
+Routes["/runtime/background.js"] = {
+  usage: '',
+  ...routeWithContents(
+    async () => {
+      // `window.backgroundJS` is the source code of the file you're
+      // reading right now! it needs to be a global because we want
+      // its value (the changed JS text) to survive even as this whole
+      // module gets re-evaluated.
+      window.backgroundJS = window.backgroundJS ||
+        await window.fetch(chrome.runtime.getURL('background.js'))
+                .then(r => r.text());
+      return window.backgroundJS;
+    },
+    async ({}, buf) => { window.backgroundJS = buf; }
+  ),
+  release({fh}) {
+    // Note that we eval on release, not on write.
+    eval(window.backgroundJS);
+    // TODO: would be better if we could call 'super'.release() so
+    // we wouldn't need to involve how Cache works here.
+    routeWithContents.Cache.removeObjectForHandle(fh);
+    return {};
+  }
+};
+
+Routes["/runtime/background.js.html"] = routeWithContents(async () => {
+  const js = await window.fetch(chrome.runtime.getURL('background.js'))
+        .then(r => r.text());
+
+  const classes = [
+    [/Routes\["[^\]]+"\] = /, 'route']
+  ];
+
+  const classedJs =
+    js.split('\n')
+        .map((line, i) => {
+          const class_ = classes.find(([re, class_]) => re.test(line));
+          line = line
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+          if (!class_) { return `<div class="normal line">${line}</div>`; }
+          return `<div class="${class_[1]} line">${line}</div>`;
+        })
+        .join('');
+
+  return `
+<html>
+  <head>
+    <style>
+      body { overflow-x: hidden; }
+      .route { background-color: rgb(255, 196, 196); }
+      .line { position: absolute; height: 15px; width: 100%; }
+      .line { transition: height 0.5s cubic-bezier(0.64, 0.08, 0.24, 1), transform 0.5s cubic-bezier(0.64, 0.08, 0.24, 1); }
+    </style>
+  </head>
+  <body>
+    <!-- <dl>
+      ${Object.entries(Routes).map(([a, b]) => `
+        <dt>${a}</dt>
+        <dd>${b}</dd>
+      `).join('\n')}
+    </dl> -->
+    <pre><code>${classedJs}</code></pre>
+   
+    <script>
+      const lines = [...document.querySelectorAll('div.line')];
+      function render() {
+        let y = 0;
+        for (let line of lines) {
+          if (line.classList.contains('route') || line.dataset.expand == 'true') {
+            line.style.height = '15px';
+            line.style.transform = 'translate(0px, ' + y + 'px)';
+            y += 15;
+
+          } else {
+            line.style.height = '15px';
+            line.style.transform = 'translate(0px, ' + (y - 7.5) + 'px) scaleY(' + 2/15 + ')';
+            y += 2;
+          }
+        }
+      }
+      render();
+
+      for (let line of lines) {
+        function treatNeighborLines(line, expand) {
+          let neighborLine = line;
+          while (neighborLine && !neighborLine.classList.contains('route')) {
+            neighborLine.dataset.expand = expand;
+            neighborLine = neighborLine.nextElementSibling;
+          }
+          neighborLine = line;
+          while (neighborLine && !neighborLine.classList.contains('route')) {
+            neighborLine.dataset.expand = expand;
+            neighborLine = neighborLine.previousElementSibling;
+          }
+          render();
+        }
+        line.onmousedown = () => {
+          treatNeighborLines(line, true);
+          document.body.onmouseup = () => { treatNeighborLines(line, false); };
+        };
+      }
+    </script>
+  </body>
+</html>
+  `;
+});
 
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever. Basically, you need to start at
@@ -725,6 +841,9 @@ async function onMessage(req) {
 };
 
 function tryConnect() {
+  // so we don't try to reconnect if we're hot-swapping background.js.
+  if (window.isConnected) return;
+
   // Safari is very weird -- it has this native app that we have to talk to,
   // so we poke that app to wake it up, get it to start the TabFS process
   // and boot a WebSocket, then connect to it.
@@ -745,7 +864,10 @@ function tryConnect() {
         } };
 
         setTimeout(() => {
-          if (socket.readyState !== 1) {
+          if (socket.readyState === 1) {
+            window.isConnected = true;
+
+          } else {
             console.log('ws connection failed, retrying in', checkAfterTime);
             connectSocket(checkAfterTime * 2);
           }
@@ -757,8 +879,12 @@ function tryConnect() {
   }
   
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
+  port.onConnect.addListener(() => { window.isConnected = true; });
   port.onMessage.addListener(onMessage);
-  port.onDisconnect.addListener(p => { console.log('disconnect', p); });
+  port.onDisconnect.addListener(p => {
+    window.isConnected = false;
+    console.log('disconnect', p);
+  });
 }
 
 
