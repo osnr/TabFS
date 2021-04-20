@@ -154,6 +154,7 @@ const defineFile = (function() {
 const Routes = {};
 
 Routes["/tabs/create"] = {
+  usage: 'echo "https://www.google.com" > $0',
   async write({buf}) {
     const url = buf.trim();
     await browser.tabs.create({url});
@@ -162,7 +163,8 @@ Routes["/tabs/create"] = {
   async truncate() { return {}; }
 };
 
-Routes["/tabs/by-id"] = {  
+Routes["/tabs/by-id"] = {
+  usage: 'ls $0',
   async readdir() {
     const tabs = await browser.tabs.query({});
     return { entries: [".", "..", ...tabs.map(tab => String(tab.id))] };
@@ -170,7 +172,7 @@ Routes["/tabs/by-id"] = {
 };
 
 (function() {
-  const withTab = (readHandler, writeHandler) => defineFile(async ({tabId}) => {
+  const routeForTab = (readHandler, writeHandler) => defineFile(async ({tabId}) => {
     const tab = await browser.tabs.get(tabId);
     return readHandler(tab);
 
@@ -178,27 +180,46 @@ Routes["/tabs/by-id"] = {
     await browser.tabs.update(tabId, writeHandler(buf));
   } : undefined);
 
-  const fromScript = code => defineFile(async ({tabId}) => {
+  const routeFromScript = code => defineFile(async ({tabId}) => {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
-  Routes["/tabs/by-id/#TAB_ID/url.txt"] = withTab(tab => tab.url + "\n", buf => ({ url: buf }));
-  Routes["/tabs/by-id/#TAB_ID/title.txt"] = withTab(tab => tab.title + "\n");
-  Routes["/tabs/by-id/#TAB_ID/text.txt"] = fromScript(`document.body.innerText`);
-  Routes["/tabs/by-id/#TAB_ID/body.html"] = fromScript(`document.body.innerHTML`);
+  Routes["/tabs/by-id/#TAB_ID/url.txt"] = {
+    usage: ['cat $0',
+            'echo "https://www.google.com" > $0'],
+    ...routeForTab(tab => tab.url + "\n",
+                   buf => ({ url: buf }))
+  };
+  Routes["/tabs/by-id/#TAB_ID/title.txt"] = {
+    usage: 'cat $0',
+    ...routeForTab(tab => tab.title + "\n")
+  };
+  Routes["/tabs/by-id/#TAB_ID/text.txt"] = {
+    usage: 'cat $0',
+    ...routeFromScript(`document.body.innerText`)
+  };
+  Routes["/tabs/by-id/#TAB_ID/body.html"] = {
+    usage: 'cat $0',
+    ...routeFromScript(`document.body.innerHTML`)
+  };
 
   // echo true > mnt/tabs/by-id/1644/active
   // cat mnt/tabs/by-id/1644/active
-  Routes["/tabs/by-id/#TAB_ID/active"] = withTab(
-    tab => JSON.stringify(tab.active) + '\n',
-    // WEIRD: we do startsWith because you might end up with buf
-    // being "truee" (if it was "false", then someone wrote "true")
-    buf => ({ active: buf.startsWith("true") })
-  );
+  Routes["/tabs/by-id/#TAB_ID/active"] = {
+    usage: ['cat $0',
+            'echo true > $0'],
+    ...routeForTab(
+      tab => JSON.stringify(tab.active) + '\n',
+      // WEIRD: we do startsWith because you might end up with buf
+      // being "truee" (if it was "false", then someone wrote "true")
+      buf => ({ active: buf.startsWith("true") })
+    )
+  };
 })();
 (function() {
   const evals = {};
   Routes["/tabs/by-id/#TAB_ID/evals"] = {
+    usage: 'ls $0',
     async readdir({path, tabId}) {
       return { entries: [".", "..",
                          ...Object.keys(evals[tabId] || {}),
@@ -213,6 +234,9 @@ Routes["/tabs/by-id"] = {
     },
   };
   Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
+    usage: ['cat $0.result',
+            'echo "2 + 2" > $0'],
+
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({tabId, filename, mode}) {
       evals[tabId] = evals[tabId] || {};
