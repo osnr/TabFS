@@ -571,6 +571,19 @@ Routes["/runtime/reload"] = {
   truncate() { return {}; }
 };
 
+(function() {
+  let __backgroundJS;
+  Object.defineProperty(window, 'backgroundJS', {
+    async get() {
+      __backgroundJS = __backgroundJS ||
+        await window.fetch(chrome.runtime.getURL('background.js'))
+        .then(r => r.text());
+      return __backgroundJS;
+    },
+    set(js) { __backgroundJS = js; }
+  });
+})();
+
 // added at first to make development on Safari less painful: Safari
 // normally requires you to recompile the whole Xcode project to
 // deploy any update to background.js.
@@ -582,9 +595,6 @@ Routes["/runtime/background.js"] = {
       // reading right now! it needs to be a global because we want
       // its value (the changed JS text) to survive even as this whole
       // module gets re-evaluated.
-      window.backgroundJS = window.backgroundJS ||
-        await window.fetch(chrome.runtime.getURL('background.js'))
-                .then(r => r.text());
       return window.backgroundJS;
     },
     async ({}, buf) => { window.backgroundJS = buf; }
@@ -600,13 +610,11 @@ Routes["/runtime/background.js"] = {
 };
 
 Routes["/runtime/background.js.html"] = routeWithContents(async () => {
-  const js = await window.fetch(chrome.runtime.getURL('background.js'))
-        .then(r => r.text());
-
   const classes = [
     [/Routes\["[^\]]+"\] = /, 'route']
   ];
 
+  const js = await window.backgroundJS;
   const classedJs =
     js.split('\n')
         .map((line, i) => {
@@ -627,7 +635,7 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
   <head>
     <style>
       body { overflow-x: hidden; }
-      .route { background-color: rgb(255, 196, 196); }
+      .route { color: blue; background-color: rgb(255, 196, 196); }
       .line { position: absolute; height: 15px; width: 100%; }
       .line { transition: height 0.5s cubic-bezier(0.64, 0.08, 0.24, 1), transform 0.5s cubic-bezier(0.64, 0.08, 0.24, 1); }
     </style>
@@ -659,26 +667,6 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
         }
       }
       render();
-
-      for (let line of lines) {
-        function treatNeighborLines(line, expand) {
-          let neighborLine = line;
-          while (neighborLine && !neighborLine.classList.contains('route')) {
-            neighborLine.dataset.expand = expand;
-            neighborLine = neighborLine.nextElementSibling;
-          }
-          neighborLine = line;
-          while (neighborLine && !neighborLine.classList.contains('route')) {
-            neighborLine.dataset.expand = expand;
-            neighborLine = neighborLine.previousElementSibling;
-          }
-          render();
-        }
-        line.onmousedown = () => {
-          treatNeighborLines(line, true);
-          document.body.onmouseup = () => { treatNeighborLines(line, false); };
-        };
-      }
     </script>
   </body>
 </html>
@@ -896,3 +884,4 @@ if (typeof process === 'object') {
 } else {
   tryConnect();
 }
+
