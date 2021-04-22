@@ -575,12 +575,14 @@ Routes["/runtime/reload"] = {
   let __backgroundJS;
   Object.defineProperty(window, 'backgroundJS', {
     async get() {
-      __backgroundJS = __backgroundJS ||
-        await window.fetch(chrome.runtime.getURL('background.js'))
-        .then(r => r.text());
+      if (!__backgroundJS) {
+        __backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
+          .then(r => r.text());
+      }
       return __backgroundJS;
     },
-    set(js) { __backgroundJS = js; }
+    set(js) { __backgroundJS = js; },
+    configurable: true // so we can rerun this on hot reload
   });
 })();
 
@@ -599,9 +601,9 @@ Routes["/runtime/background.js"] = {
     },
     async ({}, buf) => { window.backgroundJS = buf; }
   ),
-  release({fh}) {
+  async release({fh}) {
     // Note that we eval on release, not on write.
-    eval(window.backgroundJS);
+    eval(await window.backgroundJS);
     // TODO: would be better if we could call 'super'.release() so
     // we wouldn't need to involve how Cache works here.
     routeWithContents.Cache.removeObjectForHandle(fh);
@@ -635,7 +637,7 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
   <head>
     <style>
       body { overflow-x: hidden; }
-      .route { color: blue; background-color: rgb(255, 196, 196); }
+      .route { background-color: rgb(255, 196, 196); }
       .line { position: absolute; height: 15px; width: 100%; }
       .line { transition: height 0.5s cubic-bezier(0.64, 0.08, 0.24, 1), transform 0.5s cubic-bezier(0.64, 0.08, 0.24, 1); }
     </style>
