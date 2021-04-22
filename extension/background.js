@@ -153,7 +153,8 @@ const routeWithContents = (function() {
   return routeWithContents;
 })();
 
-const Routes = {};
+// global so it can be hot-reloaded
+window.Routes = {};
 
 Routes["/tabs/create"] = {
   usage: 'echo "https://www.google.com" > $0',
@@ -572,16 +573,19 @@ Routes["/runtime/reload"] = {
 };
 
 (function() {
-  let __backgroundJS;
+  // window.__backgroundJS needs to be a global because we want
+  // its value (the changed JS text) to survive even as this whole
+  // module gets re-evaluated.
+  window.__backgroundJS = window.__backgroundJS || false;
   Object.defineProperty(window, 'backgroundJS', {
     async get() {
-      if (!__backgroundJS) {
-        __backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
+      if (!window.__backgroundJS) {
+        window.__backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
           .then(r => r.text());
       }
-      return __backgroundJS;
+      return window.__backgroundJS;
     },
-    set(js) { __backgroundJS = js; },
+    set(js) { window.__backgroundJS = js; },
     configurable: true // so we can rerun this on hot reload
   });
 })();
@@ -594,9 +598,7 @@ Routes["/runtime/background.js"] = {
   ...routeWithContents(
     async () => {
       // `window.backgroundJS` is the source code of the file you're
-      // reading right now! it needs to be a global because we want
-      // its value (the changed JS text) to survive even as this whole
-      // module gets re-evaluated.
+      // reading right now!
       return window.backgroundJS;
     },
     async ({}, buf) => { window.backgroundJS = buf; }
