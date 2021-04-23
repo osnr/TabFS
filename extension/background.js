@@ -613,9 +613,33 @@ Routes["/runtime/background.js"] = {
   }
 };
 
+Routes["/runtime/routes.html"] = routeWithContents(async () => {
+  return `
+<html>
+  <body>
+    <dl>
+      ${Object.entries(Routes).map(([path, {usage}]) => {
+        const usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
+        return `
+          <dt>${path}</dt>
+          <dd>Usage:
+            <ul>
+              ${usages.map(u => `<li>${u}</li>`).join('\n')}
+            </ul>
+          </dd>
+        `;
+      }).join('\n')}
+    </dl>
+  </body>
+</html>
+`;
+});
+
 Routes["/runtime/background.js.html"] = routeWithContents(async () => {
+  // WIP
   const classes = [
-    [/Routes\["[^\]]+"\] = /, 'route']
+    [/Routes\["[^\]]+"\] = /, 'route'],
+    [/usage:/, 'usage']
   ];
 
   const js = await window.backgroundJS;
@@ -645,12 +669,6 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
     </style>
   </head>
   <body>
-    <!-- <dl>
-      ${Object.entries(Routes).map(([a, b]) => `
-        <dt>${a}</dt>
-        <dd>${b}</dd>
-      `).join('\n')}
-    </dl> -->
     <pre><code>${classedJs}</code></pre>
    
     <script>
@@ -658,7 +676,7 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
       function render() {
         let y = 0;
         for (let line of lines) {
-          if (line.classList.contains('route') || line.dataset.expand == 'true') {
+          if (line.classList.contains('route') || line.classList.contains('usage')) {
             line.style.height = '15px';
             line.style.transform = 'translate(0px, ' + y + 'px)';
             y += 15;
