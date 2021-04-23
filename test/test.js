@@ -1,6 +1,7 @@
 const assert = require('assert');
 
 // mock chrome namespace
+global.window = global;
 global.chrome = {};
 // run background.js
 const {Routes, tryMatchRoute} = require('../extension/background');
