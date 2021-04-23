@@ -1,3 +1,10 @@
+// This file is the heart of TabFS. Each route (synthetic file) is
+// defined by an entry in the Routes object. You can live-edit this
+// file by editing `runtime/background.js` in the mounted TabFS.  I
+// recommend editing the real `extension/background.js` on disk, but
+// setting a hook to copy the file on top of runtime/background.js
+// every time you Save.
+
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -614,14 +621,23 @@ Routes["/runtime/background.js"] = {
 };
 
 Routes["/runtime/routes.html"] = routeWithContents(async () => {
+  const jsLines = (await window.backgroundJS).split('\n');
+  function findRouteLineNumber(path) {
+    for (let i = 0; i < jsLines.length; i++) {
+      if (jsLines[i].includes(path)) { return i + 1; }
+    }
+  }
   return `
 <html>
   <body>
     <dl>
       ${Object.entries(Routes).map(([path, {usage}]) => {
-        const usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
+        path = path.substring(1); // drop leading /
+        let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
+        usages = usages.map(u => u.replace('\$0', path));
+        const href = `https://github.com/osnr/TabFS/blob/master/extension/background.js#L${findRouteLineNumber(path)}`;
         return `
-          <dt>${path}</dt>
+          <dt>${path} (<a href="${href}">source</a>)</dt>
           <dd>Usage:
             <ul>
               ${usages.map(u => `<li>${u}</li>`).join('\n')}
@@ -889,7 +905,7 @@ function tryConnect() {
   }
   
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
-  port.onConnect.addListener(() => { window.isConnected = true; });
+  window.isConnected = true;
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {
     window.isConnected = false;
