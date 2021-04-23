@@ -173,6 +173,39 @@ Routes["/tabs/create"] = {
   async truncate() { return {}; }
 };
 
+Routes["/tabs/by-title"] = {
+  usage: 'ls $0',
+  getattr() {
+    return {
+      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_nlink: 3,
+      st_size: 0,
+    };
+  },
+  async readdir() {
+    const tabs = await browser.tabs.query({});
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "." + String(tab.id))] };
+  }
+};
+Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
+  // TODO: date
+  usage: ['rm $0'],
+  async readlink({tabId}) { // a symbolic link to /tabs/by-id/[id for this tab]
+    return { buf: "../by-id/" + tabId };
+  },
+  async unlink({tabId}) {
+    await browser.tabs.remove(tabId);
+    return {};
+  }
+};
+Routes["/tabs/last-focused"] = {
+  // a symbolic link to /tabs/by-id/[id for this tab]
+  async readlink() {
+    const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
+    return { buf: "by-id/" + id };
+  }
+};
+
 Routes["/tabs/by-id"] = {
   usage: 'ls $0',
   async readdir() {
@@ -327,11 +360,14 @@ Routes["/tabs/by-id/#TAB_ID/window"] = {
   }
 };
 Routes["/tabs/by-id/#TAB_ID/control"] = {
-  // echo remove > mnt/tabs/by-id/1644/control
+  // see https://developer.chrome.com/extensions/tabs
+  usage: ['echo remove > $0',
+          'echo reload > $0',
+          'echo goForward > $0',
+          'echo goBack > $0',
+          'echo discard > $0'],
   async write({tabId, buf}) {
     const command = buf.trim();
-    // can use `discard`, `remove`, `reload`, `goForward`, `goBack`...
-    // see https://developer.chrome.com/extensions/tabs
     await browser.tabs[command](tabId);
     return {size: stringToUtf8Array(buf).length};
   },
@@ -481,37 +517,6 @@ Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = routeWithContents(async ({t
   await browser.tabs.executeScript(tabId, {code});
 });
 
-Routes["/tabs/by-title"] = {
-  getattr() {
-    return {
-      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
-      st_nlink: 3,
-      st_size: 0,
-    };
-  },
-  async readdir() {
-    const tabs = await browser.tabs.query({});
-    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "." + String(tab.id))] };
-  }
-};
-Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
-  // TODO: date
-  async readlink({tabId}) { // a symbolic link to /tabs/by-id/[id for this tab]
-    return { buf: "../by-id/" + tabId };
-  },
-  async unlink({tabId}) { // you can delete a by-title/TAB to close that tab
-    await browser.tabs.remove(tabId);
-    return {};
-  }
-};
-Routes["/tabs/last-focused"] = {
-  // a symbolic link to /tabs/by-id/[id for this tab]
-  async readlink() {
-    const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
-    return { buf: "by-id/" + id };
-  }
-};
-
 Routes["/windows"] = {
   async readdir() {
     const windows = await browser.windows.getAll();
@@ -580,9 +585,9 @@ Routes["/runtime/reload"] = {
 };
 
 (function() {
-  // window.__backgroundJS needs to be a global because we want
-  // its value (the changed JS text) to survive even as this whole
-  // module gets re-evaluated.
+  // window.__backgroundJS needs to be a global because we want its
+  // value (the changed JS text) to survive even as this whole file
+  // gets re-evaluated.
   window.__backgroundJS = window.__backgroundJS || false;
   Object.defineProperty(window, 'backgroundJS', {
     async get() {
@@ -604,8 +609,8 @@ Routes["/runtime/background.js"] = {
   usage: '',
   ...routeWithContents(
     async () => {
-      // `window.backgroundJS` is the source code of the file you're
-      // reading right now!
+      // `window.backgroundJS` is (a Promise of) the source code of
+      // the file you're reading right now!
       return window.backgroundJS;
     },
     async ({}, buf) => { window.backgroundJS = buf; }
@@ -621,6 +626,7 @@ Routes["/runtime/background.js"] = {
 };
 
 Routes["/runtime/routes.html"] = routeWithContents(async () => {
+  // WIP
   const jsLines = (await window.backgroundJS).split('\n');
   function findRouteLineNumber(path) {
     for (let i = 0; i < jsLines.length; i++) {
@@ -630,8 +636,10 @@ Routes["/runtime/routes.html"] = routeWithContents(async () => {
   return `
 <html>
   <body>
+    <p>(work in progress)</p>
     <dl>
-      ${Object.entries(Routes).map(([path, {usage}]) => {
+      ${Object.entries(Routes).map(([path, {usage, __isInfill}]) => {
+        if (__isInfill) { return ''; }
         path = path.substring(1); // drop leading /
         let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
         usages = usages.map(u => u.replace('\$0', path));
@@ -685,6 +693,8 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
     </style>
   </head>
   <body>
+    <p>(very work in progress)</p>
+
     <pre><code>${classedJs}</code></pre>
    
     <script>
@@ -731,7 +741,7 @@ for (let i = 10; i >= 0; i--) {
                           .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
       entries = [".", "..", ...new Set(entries)];
 
-      Routes[path] = { readdir() { return { entries }; } };
+      Routes[path] = { readdir() { return { entries }; }, __isInfill: true };
     }
   }
   // I also think it would be better to compute this stuff on the fly,
