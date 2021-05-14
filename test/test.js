@@ -6,10 +6,14 @@ global.chrome = {};
 // run background.js
 const {Routes, tryMatchRoute} = require('../extension/background');
 
+function readdir(path) {
+  return Routes['/tabs/by-id/#TAB_ID'].readdir({path});
+}
+
 (async () => {
-  const tabRoute = await Routes['/tabs/by-id/#TAB_ID'].readdir();
+  const tabReaddir = await readdir('/tabs/by-id/#TAB_ID');
   assert(['.', '..', 'url.txt', 'title.txt', 'text.txt']
-    .every(file => tabRoute.entries.includes(file)));
+    .every(file => tabReaddir.entries.includes(file)));
 
   assert.deepEqual(await Routes['/'].readdir(),
                    { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });

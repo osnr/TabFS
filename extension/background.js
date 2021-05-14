@@ -172,7 +172,9 @@ function routeDirectoryForChildren(path) {
   // find all direct children
   let entries = Object.keys(Routes)
       .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
-      .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
+      .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0])
+      // exclude entries with variables like :FILENAME in them
+      .filter(k => !k.includes("#") && !k.includes(":"));
 
   entries = [".", "..", ...new Set(entries)];
   return { readdir() { return { entries }; }, __isInfill: true };
@@ -232,8 +234,19 @@ Routes["/tabs/by-id"] = {
 
 // cannot use this wildcard trick w/o breaking the parent logic
 const tabIdDirectory = createWritableDirectory();
-Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => routeDirectoryForChildren("/tabs/by-id/#TAB_ID"));
-// Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = routeDirectoryWritable();
+Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
+  const childrenRoute = routeDirectoryForChildren("/tabs/by-id/#TAB_ID");
+  return {
+    ...tabIdDirectory.routeForRoot, // so getattr is inherited
+    async readdir(req) {
+      const entries =
+            [...(await tabIdDirectory.routeForRoot.readdir(req)).entries,
+             ...(await childrenRoute.readdir(req)).entries];
+      return {entries: [...new Set(entries)]};
+    }
+  };
+});
+Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = tabIdDirectory.routeForFilename;
 
 // TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
 
@@ -769,12 +782,14 @@ for (let key in Routes) {
   if (typeof Routes[key] === 'function') Routes[key] = Routes[key]();
 
   // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[0-9]+)\/url.txt
+  Routes[key].__matchVarCount = 0;
   Routes[key].__regex = new RegExp(
     '^' + key
       .split('/')
       .map(keySegment => keySegment
            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
            .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
+             Routes[key].__matchVarCount++;
              return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>` +
                          (sigil === '#' ? '[0-9]+' : '[^/]+') + `)`;
            }))
@@ -842,13 +857,17 @@ for (let key in Routes) {
   }
 }
 
+// most specific (lowest matchVarCount) routes should match first
+const sortedRoutes = Object.values(Routes).sort((a, b) =>
+  a.__matchVarCount - b.__matchVarCount
+);
 function tryMatchRoute(path) {
   if (path.match(/\/\._[^\/]+$/)) {
     // Apple Double ._whatever file for xattrs
     throw new UnixError(unix.ENOTSUP); 
   }
 
-  for (let route of Object.values(Routes)) {
+  for (let route of sortedRoutes) {
     const vars = route.__match(path);
     if (vars) { return [route, vars]; }
   }
