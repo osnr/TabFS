@@ -15,7 +15,7 @@ const {Routes, tryMatchRoute} = require('../extension/background');
                    { entries: ['.', '..', 'windows', 'extensions', 'tabs', 'runtime'] });
   assert.deepEqual(await Routes['/tabs'].readdir(),
                    { entries: ['.', '..', 'create',
-                               'by-id', 'by-title', 'last-focused'] });
+                               'by-title', 'last-focused', 'by-id'] });
 
   assert.deepEqual(tryMatchRoute('/'), [Routes['/'], {}]);
 

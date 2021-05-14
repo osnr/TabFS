@@ -324,19 +324,17 @@ function createWritableDirectory() {
 
 
 (function() {
-  // proposed refactor
   const evals = createWritableDirectory();
   Routes["/tabs/by-id/#TAB_ID/evals"] = evals.routeForRoot;
-  Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = evals.routeForFilename;
-  
-  // evals[tabId][name].result = JSON.stringify((await browser.tabs.executeScript(tabId, {code: buf}))[0]) + '\n';
-        
-  // old stuffs
-  // const evals = {};
-  // Routes["/tabs/by-id/#TAB_ID/evals"] = {
-  // };
-  // Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
-  // };
+  Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
+    ...evals.routeForFilename,
+    async write(req) {
+      const ret = await evals.routeForFilename.write(req);
+      const code = evals.directory[req.path];
+      evals.directory[req.path + '.result'] = JSON.stringify((await browser.tabs.executeScript(req.tabId, {code}))[0]) + '\n';
+      return ret;
+    }
+  };
 })();
 (function() {
   const watches = {};
