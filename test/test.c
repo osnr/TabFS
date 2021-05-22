@@ -9,6 +9,13 @@
 #include <wordexp.h>
 #include <regex.h>
 
+#if defined(__CYGWIN__)
+ // needs to be the native path for file:// urls to work
+ #define PWD "$(cygpath -w \"$(pwd)\")"
+#else
+ #define PWD "$(pwd)"
+#endif
+
 int file_contents_equal(char* path, char* contents) {
     // hehe: https://twitter.com/ianh_/status/1340450349065244675
     setenv("path", path, 1);
@@ -55,7 +62,7 @@ int main() {
     }
 
     {
-        assert(system("echo file://$(pwd)/test-resources/test-page.html > ../fs/mnt/tabs/create") == 0);
+        assert(system("echo file://" PWD "/test-resources/test-page.html > ../fs/mnt/tabs/create") == 0);
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/title.txt", "Title of Test Page"));
         assert(file_contents_equal("../fs/mnt/tabs/last-focused/text.txt", "Body Text of Test Page"));
 
@@ -87,7 +94,7 @@ int main() {
     }
 
     {
-        assert(system("echo file://$(pwd)/test-resources/test-textarea.html > ../fs/mnt/tabs/create") == 0);
+        assert(system("echo file://" PWD "/test-resources/test-textarea.html > ../fs/mnt/tabs/create") == 0);
         {
             assert(system("echo \"document.getElementById('ta').value\" > ../fs/mnt/tabs/last-focused/evals/ta.js") == 0);
 
