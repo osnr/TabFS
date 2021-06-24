@@ -17,6 +17,10 @@
     "scripts": ["vendor/browser-polyfill.js", "background.js"],
     "persistent": true
   },
+  "content_scripts": [{
+    "matches": ["*://*/*"],
+    "js": ["embed-files.js"]
+  }],
 
   "browser_specific_settings": {
     "gecko": {

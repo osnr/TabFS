@@ -232,7 +232,6 @@ Routes["/tabs/by-id"] = {
   }
 };
 
-// cannot use this wildcard trick w/o breaking the parent logic
 const tabIdDirectory = createWritableDirectory();
 Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
   const childrenRoute = routeDirectoryForChildren("/tabs/by-id/#TAB_ID");
@@ -246,9 +245,17 @@ Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
     }
   };
 });
-Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = tabIdDirectory.routeForFilename;
-
+Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = {
+  ...tabIdDirectory.routeForFilename,
+  async mknod(req) {
+    const ret = tabIdDirectory.routeForFilename.mknod(req);
+    // TODO: put icon on page
+    
+    return ret;
+  }
+};
 // TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
+// TODO: how can i let them drag files in?
 
 (function() {
   const routeForTab = (readHandler, writeHandler) => routeWithContents(async ({tabId}) => {
