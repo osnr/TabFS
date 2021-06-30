@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F02345BF268C15F300340721 /* embed-files.js in Resources */ = {isa = PBXBuildFile; fileRef = F02345BE268C15F300340721 /* embed-files.js */; };
 		F028D2B625D0B7370095C2D5 /* TabFSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B525D0B7370095C2D5 /* TabFSService.swift */; };
 		F028D2B825D0B7370095C2D5 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B725D0B7370095C2D5 /* main.swift */; };
 		F028D2D725D0B8500095C2D5 /* TabFSServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */; };
@@ -88,6 +89,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F02345BE268C15F300340721 /* embed-files.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; name = "embed-files.js"; path = "../../../embed-files.js"; sourceTree = "<group>"; };
 		F028D2B125D0B7370095C2D5 /* TabFSService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = TabFSService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		F028D2B325D0B7370095C2D5 /* TabFSServiceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabFSServiceProtocols.swift; sourceTree = "<group>"; };
 		F028D2B525D0B7370095C2D5 /* TabFSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabFSService.swift; sourceTree = "<group>"; };
@@ -223,6 +225,7 @@
 		F0442A1825C7507500D998A5 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				F02345BE268C15F300340721 /* embed-files.js */,
 				F0442A1925C7507500D998A5 /* background.js */,
 				F0442A1A25C7507500D998A5 /* safari */,
 				F0442A1B25C7507500D998A5 /* manifest.json */,
@@ -374,6 +377,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F0442A2025C7507500D998A5 /* vendor in Resources */,
+				F02345BF268C15F300340721 /* embed-files.js in Resources */,
 				F0442A1E25C7507500D998A5 /* safari in Resources */,
 				F0442A1F25C7507500D998A5 /* manifest.json in Resources */,
 				F0442A1D25C7507500D998A5 /* background.js in Resources */,
@@ -619,7 +623,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "TabFS Extension/TabFS_Extension.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 75YA78K5AM;
 				INFOPLIST_FILE = "TabFS Extension/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -638,7 +644,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "TabFS Extension/TabFS_Extension.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 75YA78K5AM;
 				INFOPLIST_FILE = "TabFS Extension/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -660,8 +668,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TabFS/TabFS.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 75YA78K5AM;
 				INFOPLIST_FILE = TabFS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -681,8 +691,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TabFS/TabFS.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 75YA78K5AM;
 				INFOPLIST_FILE = TabFS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
