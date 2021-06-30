@@ -3,7 +3,9 @@
 document.body.insertAdjacentHTML('beforeend', `
 <style>
 .--tabfs-file-container .--tabfs-file {
-  position: absolute; top: 0; left: 0;
+  /* fixed makes sense if it's a property of the tab; */
+  /* absolute would make more sense if it's a property of the page? */
+  position: fixed; top: 0; left: 0;
   z-index: 10000;
   cursor: move;
   user-select: none; -webkit-user-select: none;
@@ -36,7 +38,7 @@ function addFile(name, x, y, file) {
 <div class="--tabfs-file">${name}</div>
 `);
   const icon = container.lastElementChild;
-  icon.style.left = x; icon.style.top = y; 
+  icon.style.left = `${x}px`; icon.style.top = `${y}px`; 
 
   // from https://htmldom.dev/make-a-draggable-element/:
 
