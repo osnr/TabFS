@@ -12,12 +12,6 @@ document.body.insertAdjacentHTML('beforeend', `
   font: 12px system-ui, -apple-system;
   background-color: white;
 }
-
-body.dragging::after {
-  background-color: green; opacity: 0.5; 
-  content: 'hello'; display: block;
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-}
 </style>
 
 <div class="--tabfs-file-container">
@@ -87,27 +81,19 @@ function addFile(name, x, y, file) {
 
 ['a.js', 'b.html', 'c.js'].forEach(name => addFile(name));
 
-// make the files draggable
-// remember their positions on rerender, like do a merge when we get a new set of files
-
-// from https://htmldom.dev/highlight-an-element-when-dragging-a-file-over-it/:
-
 document.body.addEventListener('dragenter', function(e) {
   e.preventDefault();
-  e.target.classList.add('dragging');
 });
 document.body.addEventListener('dragover', function(e) {
   e.preventDefault();
 });
 document.body.addEventListener('dragleave', function(e) {
   e.preventDefault();
-  e.target.classList.remove('dragging');
 });
 
 document.body.addEventListener('drop', function(e) {
-  e.preventDefault();
-  e.target.classList.remove('dragging');
-
+  // bubble thing
+  e.preventDefault(); // stops browser nav to that file
   for (let file of [...e.dataTransfer.files]) {
     addFile(file.name, e.clientX, e.clientY, file);
   }
