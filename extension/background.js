@@ -238,10 +238,15 @@ Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
   return {
     ...tabIdDirectory.routeForRoot, // so getattr is inherited
     async readdir(req) {
+      // readdir should return both entries from the writable part of
+      // the directory & entries from the builtin part
+      // (kinda https://twitter.com/rsnous/status/1363884562300870658)
       const entries =
             [...(await tabIdDirectory.routeForRoot.readdir(req)).entries,
              ...(await childrenRoute.readdir(req)).entries];
       return {entries: [...new Set(entries)]};
+      // (it might be nice to have a combinator or something to do
+      // this automatically, to make 'union directories'...)
     }
   };
 });
