@@ -166,6 +166,52 @@ const routeWithContents = (function() {
   return routeWithContents;
 })();
 
+// Returns a 'writable directory' object; its routeForRoot and
+// routeForFilename properties can be wired up as routes to create a
+// generally writable folder.
+function createWritableDirectory() {
+  const dir = {}; // Map<Path, {content: String, x, y}>
+  return {
+    directory: dir,
+    routeForRoot: {
+      usage: 'ls $0',
+      async readdir({path}) {
+        // filter out keys not from this path prefix,
+        // get just last component of keys (filename)
+        return { entries: [".", "..",
+                           ...Object.keys(dir)
+                           .filter(key => key.startsWith(path))
+                           .map(key => key.substr(key.lastIndexOf("/") + 1))] };
+      },
+      getattr() {
+        return {
+          st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
+          st_nlink: 3,
+          st_size: 0,
+        };
+      },
+    },
+    routeForFilename: {
+      usage: ['echo "2 + 2" > $0',
+              'cat $0.result'],
+
+      async mknod({path, mode}) {
+        dir[path] = '';
+        return {};
+      },
+      async unlink({path}) {
+        delete dir[path];
+        return {};
+      },
+
+      ...routeWithContents(
+        async ({path}) => dir[path],
+        async ({path}, buf) => { dir[path] = buf; }
+      )
+    }
+  };
+}
+
 function routeDirectoryForChildren(path) {
   function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
@@ -234,6 +280,8 @@ Routes["/tabs/by-id"] = {
 
 const tabIdDirectory = createWritableDirectory();
 Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
+  // we deferred construction of this route so that we have all the
+  // children to enumerate by now.
   const childrenRoute = routeDirectoryForChildren("/tabs/by-id/#TAB_ID");
   return {
     ...tabIdDirectory.routeForRoot, // so getattr is inherited
@@ -250,17 +298,7 @@ Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
     }
   };
 });
-Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = {
-  ...tabIdDirectory.routeForFilename,
-  async mknod(req) {
-    const ret = tabIdDirectory.routeForFilename.mknod(req);
-    // TODO: put icon on page
-    
-    return ret;
-  }
-};
-// TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
-// TODO: how can i let them drag files in?
+Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = tabIdDirectory.routeForFilename;
 
 (function() {
   const routeForTab = (readHandler, writeHandler) => routeWithContents(async ({tabId}) => {
@@ -305,49 +343,6 @@ Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = {
     )
   };
 })();
-function createWritableDirectory() {
-  const dir = {};
-  return {
-    directory: dir,
-    routeForRoot: {
-      usage: 'ls $0',
-      async readdir({path}) {
-        // get just last component of keys (filename)
-        return { entries: [".", "..",
-                           ...Object.keys(dir).map(
-                             key => key.substr(key.lastIndexOf("/") + 1)
-                           )] };
-      },
-      getattr() {
-        return {
-          st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
-          st_nlink: 3,
-          st_size: 0,
-        };
-      },
-    },
-    routeForFilename: {
-      usage: ['echo "2 + 2" > $0',
-              'cat $0.result'],
-
-      async mknod({path, mode}) {
-        dir[path] = '';
-        return {};
-      },
-      async unlink({path}) {
-        delete dir[path];
-        return {};
-      },
-
-      ...routeWithContents(
-        async ({path}) => dir[path],
-        async ({path}, buf) => { dir[path] = buf; }
-      )
-    }
-  };
-}
-
-
 (function() {
   const evals = createWritableDirectory();
   Routes["/tabs/by-id/#TAB_ID/evals"] = evals.routeForRoot;
