@@ -33,6 +33,10 @@ if (chrome.extension.getBackgroundPage) {
   font: 12px system-ui, -apple-system;
   background-color: white;
 }
+
+.--tabfs-file-container .--tabfs-file::before {
+  content: '📁'; display: block; font-size: 48px;
+}
 </style>
 
 <div class="--tabfs-file-container">
