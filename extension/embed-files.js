@@ -6,28 +6,34 @@ if (chrome.extension.getBackgroundPage) {
   // accept requests from the page
 
   browser.runtime.onMessage.addListener(async (request, sender) => {
-    let {entries} = await Routes["/tabs/by-id/#TAB_ID"]
-        .readdir({path: `/tabs/by-id/${sender.tab.id}`});
-    entries = await Promise.all(entries.map(filename => {
-      let path = `/tabs/by-id/${sender.tab.id}/${filename}`;
-      if (filename === '.') {
-        path = `/tabs/by-id/${sender.tab.id}`;
-      } else if (filename === '..') {
-        path = `/tabs/by-id`;
-      }
-      return doRequest({op: 'getattr', path})
-        .then(stat => ({ ...stat, filename }));
-    }));
-    // TODO: report back not as reply, but as general msg
-    return entries;
+    if (request.op === 'LS') {
+      let {entries} = await Routes["/tabs/by-id/#TAB_ID"]
+          .readdir({path: `/tabs/by-id/${sender.tab.id}`});
+      entries = await Promise.all(entries.map(filename => {
+        let path = `/tabs/by-id/${sender.tab.id}/${filename}`;
+        if (filename === '.') {
+          path = `/tabs/by-id/${sender.tab.id}`;
+        } else if (filename === '..') {
+          path = `/tabs/by-id`;
+        }
+        // how to store X, Y?
+        return doRequest({op: 'getattr', path})
+          .then(stat => ({ ...stat, filename, path }));
+      }));
+      // TODO: report back not as reply, but as general msg
+      return entries;
+
+    } else if (request.op === 'OPEN') {
+      chrome.tabs.create({
+	url: `file:///Users/osnr/t${request.path}`,
+	index: sender.tab.index + 1,
+      });
+
+    } else if (request.op === 'RELOCATE') {
+      // TODO: store new pos as local cached attr ?
+
+    }
   });
-
-  // send the file list to the page
-
-  // receive events from the page of
-  // they dragged a new file in,
-  // or they moved a file,
-  // or they double-clicked a file
 
 } else {
   // When running in page:
@@ -122,10 +128,14 @@ if (chrome.extension.getBackgroundPage) {
     };
 
     icon.addEventListener('mousedown', mouseDownHandler);
+    icon.addEventListener('dblclick', () => {
+      chrome.runtime.sendMessage({op: 'OPEN', path: stat.path});
+      return false;
+    });
   };
 
   // ask for what the files are
-  chrome.runtime.sendMessage({hello: 'hello'}, function(response) {
+  chrome.runtime.sendMessage({op: 'LS'}, function(response) {
     response.forEach(stat => addFile(stat));
   });
   
