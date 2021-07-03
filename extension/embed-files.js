@@ -6,7 +6,19 @@ if (chrome.extension.getBackgroundPage) {
   // accept requests from the page
 
   browser.runtime.onMessage.addListener(async (request, sender) => {
-    const {entries} = await Routes["/tabs/by-id/#TAB_ID"].readdir({path: `/tabs/by-id/${sender.tab.id}`});
+    let {entries} = await Routes["/tabs/by-id/#TAB_ID"]
+        .readdir({path: `/tabs/by-id/${sender.tab.id}`});
+    entries = await Promise.all(entries.map(filename => {
+      let path = `/tabs/by-id/${sender.tab.id}/${filename}`;
+      if (filename === '.') {
+        path = `/tabs/by-id/${sender.tab.id}`;
+      } else if (filename === '..') {
+        path = `/tabs/by-id`;
+      }
+      return doRequest({op: 'getattr', path})
+        .then(stat => ({ ...stat, filename }));
+    }));
+    // TODO: report back not as reply, but as general msg
     return entries;
   });
 
@@ -35,7 +47,13 @@ if (chrome.extension.getBackgroundPage) {
 }
 
 .--tabfs-file-container .--tabfs-file::before {
-  content: '📁'; display: block; font-size: 48px;
+  display: block; font-size: 48px;
+}
+.--tabfs-file-container .--tabfs-file::before {
+  content: '📄'; 
+}
+.--tabfs-file-container .--tabfs-file--directory::before {
+  content: '📁'; 
 }
 </style>
 
@@ -47,16 +65,14 @@ if (chrome.extension.getBackgroundPage) {
   const icons = {};
 
   let frontierX = 0, frontierY = 0;
-  const addFile = function(name, x, y, file) {
-    // TODO: report into the extension
-
+  const addFile = function(stat, x, y, file) {
     if (!x) {
       x = frontierX; frontierX += 64;
       y = 0;
     }
 
     container.insertAdjacentHTML('beforeend', `
-<div class="--tabfs-file">${name}</div>
+<div class="--tabfs-file ${stat.st_mode & 040000 !== 0 ? '--tabfs-file--directory' : ''}">${stat.filename}</div>
 `);
     const icon = container.lastElementChild;
     icon.style.left = `${x}px`; icon.style.top = `${y}px`; 
@@ -101,6 +117,8 @@ if (chrome.extension.getBackgroundPage) {
       // Remove the handlers of `mousemove` and `mouseup`
       document.removeEventListener('mousemove', mouseMoveHandler);
       document.removeEventListener('mouseup', mouseUpHandler);
+
+      // TODO: report into extension
     };
 
     icon.addEventListener('mousedown', mouseDownHandler);
@@ -108,7 +126,7 @@ if (chrome.extension.getBackgroundPage) {
 
   // ask for what the files are
   chrome.runtime.sendMessage({hello: 'hello'}, function(response) {
-    response.forEach(name => addFile(name));
+    response.forEach(stat => addFile(stat));
   });
   
   document.body.addEventListener('dragenter', function(e) {

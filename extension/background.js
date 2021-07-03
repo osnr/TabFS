@@ -880,6 +880,12 @@ function tryMatchRoute(path) {
   }
   throw new UnixError(unix.ENOENT);
 }
+async function doRequest(req) {
+  const [route, vars] = tryMatchRoute(req.path);
+  const response = await route[req.op]({...req, ...vars});
+  response.op = req.op;
+  return response;
+}
 
 let port;
 async function onMessage(req) {
@@ -896,9 +902,7 @@ async function onMessage(req) {
 
   /* console.time(req.op + ':' + req.path);*/
   try {
-    const [route, vars] = tryMatchRoute(req.path);
-    response = await route[req.op]({...req, ...vars});
-    response.op = req.op;
+    response = await doRequest(req);
     if (response.buf) { response.buf = btoa(response.buf); }
 
   } catch (e) {
