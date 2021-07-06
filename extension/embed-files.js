@@ -155,6 +155,7 @@ if (chrome.extension.getBackgroundPage) {
 
   // ask for what the files are
   chrome.runtime.onMessage.addListener(function(entries) {
+    container.innerHTML = '';
     entries.forEach(stat => addFile(stat));
   });
   chrome.runtime.sendMessage({op: 'LS'});
