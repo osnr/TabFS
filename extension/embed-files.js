@@ -2,26 +2,32 @@ if (chrome.extension.getBackgroundPage) {
   // When running in background script:
   // 'Server' that manages the files for all tabs.
 
-  // TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
-  // accept requests from the page
+  const locations = {};
+  // FIXME: garbage-collect old locations
 
   browser.runtime.onMessage.addListener(async (request, sender) => {
-    if (request.op === 'LS') {
+    async function ls() {
       let {entries} = await Routes["/tabs/by-id/#TAB_ID"]
           .readdir({path: `/tabs/by-id/${sender.tab.id}`});
       entries = await Promise.all(entries.map(filename => {
         let path = `/tabs/by-id/${sender.tab.id}/${filename}`;
-        if (filename === '.') {
-          path = `/tabs/by-id/${sender.tab.id}`;
-        } else if (filename === '..') {
-          path = `/tabs/by-id`;
-        }
-        // how to store X, Y?
-        return doRequest({op: 'getattr', path})
-          .then(stat => ({ ...stat, filename, path }));
+        return doRequest({op: 'getattr', path: (function() {
+          let normalizedPath = path;
+          if (filename === '.') {
+            normalizedPath = `/tabs/by-id/${sender.tab.id}`;
+          } else if (filename === '..') {
+            normalizedPath = `/tabs/by-id`;
+          }
+          return normalizedPath;
+        })()})
+          .then(stat => ({ ...stat, ...(locations[path] || {}),
+                           filename, path }));
       }));
-      // TODO: report back not as reply, but as general msg
-      return entries;
+      await browser.tabs.sendMessage(sender.tab.id, entries);
+    }
+
+    if (request.op === 'LS') {
+      await ls();
 
     } else if (request.op === 'OPEN') {
       chrome.tabs.create({
@@ -30,8 +36,17 @@ if (chrome.extension.getBackgroundPage) {
       });
 
     } else if (request.op === 'RELOCATE') {
-      // TODO: store new pos as local cached attr ?
+      locations[request.path] = {x: request.x, y: request.y};
 
+    } else if (request.op === 'CREATE') {
+      const path = `/tabs/by-id/${sender.tab.id}/${request.filename}`;
+      await doRequest({op: 'mknod', path });
+      const {fh} = await doRequest({op: 'open', path });
+      await doRequest({op: 'write', path, fh, buf: request.buf, offset: 0 });
+      await doRequest({op: 'release', path, fh });
+      locations[path] = {x: request.x, y: request.y};
+
+      await ls();
     }
   });
 
@@ -71,10 +86,13 @@ if (chrome.extension.getBackgroundPage) {
   const icons = {};
 
   let frontierX = 0, frontierY = 0;
-  const addFile = function(stat, x, y, file) {
-    if (!x) {
+  const addFile = function(stat) {
+    let x = stat.x; let y = stat.y;
+    if (!('x' in stat)) {
       x = frontierX; frontierX += 64;
       y = 0;
+      chrome.runtime.sendMessage({op: 'RELOCATE', path: stat.path,
+                                  x, y});
     }
 
     container.insertAdjacentHTML('beforeend', `
@@ -124,7 +142,8 @@ if (chrome.extension.getBackgroundPage) {
       document.removeEventListener('mousemove', mouseMoveHandler);
       document.removeEventListener('mouseup', mouseUpHandler);
 
-      // TODO: report into extension
+      chrome.runtime.sendMessage({op: 'RELOCATE', path: stat.path,
+                                  x: mouseX, y: mouseY});
     };
 
     icon.addEventListener('mousedown', mouseDownHandler);
@@ -135,9 +154,10 @@ if (chrome.extension.getBackgroundPage) {
   };
 
   // ask for what the files are
-  chrome.runtime.sendMessage({op: 'LS'}, function(response) {
-    response.forEach(stat => addFile(stat));
+  chrome.runtime.onMessage.addListener(function(entries) {
+    entries.forEach(stat => addFile(stat));
   });
+  chrome.runtime.sendMessage({op: 'LS'});
   
   document.body.addEventListener('dragenter', function(e) {
     e.preventDefault();
@@ -149,11 +169,16 @@ if (chrome.extension.getBackgroundPage) {
     e.preventDefault();
   });
 
-  document.body.addEventListener('drop', function(e) {
-    // bubble thing
+  document.body.addEventListener('drop', async function(e) {
     e.preventDefault(); // stops browser nav to that file
     for (let file of [...e.dataTransfer.files]) {
-      addFile(file.name, e.clientX, e.clientY, file);
+      // FIXME: this doesn't work for non-text files
+      // (some encoding issue)
+      const buf = await file.text(); 
+      chrome.runtime.sendMessage({ op: 'CREATE',
+                                   filename: file.name,
+                                   x: e.clientX, y: e.clientY,
+                                   buf });
     }
   });
 }
