@@ -65,6 +65,9 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
+// global so it can be hot-reloaded
+window.Routes = {};
+
 // Helper function: generates a full set of file operations that you
 // can use as a route handler (so clients can read and write
 // sections of the file, stat it to get its size and see it show up
@@ -109,12 +112,14 @@ const routeWithContents = (function() {
     // defined here.
 
     async getattr(req) {
+      const data = await getData(req);
+      if (typeof data === 'undefined') { throw new UnixError(unix.ENOENT); }
       return {
         st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
         st_nlink: 1,
         // you'll want to override this if getData() is slow, because
         // getattr() gets called a lot more cavalierly than open().
-        st_size: toUtf8Array(await getData(req)).length
+        st_size: toUtf8Array(data).length
       };
     },
 
@@ -122,6 +127,7 @@ const routeWithContents = (function() {
     // data for all subsequent reads from that application.
     async open(req) {
       const data = await getData(req);
+      if (typeof data === 'undefined') { throw new UnixError(unix.ENOENT); }
       return { fh: Cache.storeObject(req.path, toUtf8Array(data)) };
     },
     async read({fh, size, offset}) {
@@ -160,8 +166,20 @@ const routeWithContents = (function() {
   return routeWithContents;
 })();
 
-// global so it can be hot-reloaded
-window.Routes = {};
+function routeDirectoryForChildren(path) {
+  function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
+
+  // find all direct children
+  let entries = Object.keys(Routes)
+      .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
+      .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0])
+      // exclude entries with variables like :FILENAME in them
+      .filter(k => !k.includes("#") && !k.includes(":"));
+
+  entries = [".", "..", ...new Set(entries)];
+  return { readdir() { return { entries }; }, __isInfill: true };
+}
+function routeDefer(fn) { return fn; }
 
 Routes["/tabs/create"] = {
   usage: 'echo "https://www.google.com" > $0',
@@ -214,6 +232,25 @@ Routes["/tabs/by-id"] = {
   }
 };
 
+// TODO: temporarily disabled: make tab directory writable
+
+// const tabIdDirectory = createWritableDirectory();
+// Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
+//   const childrenRoute = routeDirectoryForChildren("/tabs/by-id/#TAB_ID");
+//   return {
+//     ...tabIdDirectory.routeForRoot, // so getattr is inherited
+//     async readdir(req) {
+//       const entries =
+//             [...(await tabIdDirectory.routeForRoot.readdir(req)).entries,
+//              ...(await childrenRoute.readdir(req)).entries];
+//       return {entries: [...new Set(entries)]};
+//     }
+//   };
+// });
+// Routes["/tabs/by-id/#TAB_ID/:FILENAME"] = tabIdDirectory.routeForFilename;
+
+// TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
+
 (function() {
   const routeForTab = (readHandler, writeHandler) => routeWithContents(async ({tabId}) => {
     const tab = await browser.tabs.get(tabId);
@@ -246,8 +283,6 @@ Routes["/tabs/by-id"] = {
     ...routeFromScript(`document.body.innerHTML`)
   };
 
-  // echo true > mnt/tabs/by-id/1644/active
-  // cat mnt/tabs/by-id/1644/active
   Routes["/tabs/by-id/#TAB_ID/active"] = {
     usage: ['cat $0',
             'echo true > $0'],
@@ -259,57 +294,60 @@ Routes["/tabs/by-id"] = {
     )
   };
 })();
-(function() {
-  const evals = {};
-  Routes["/tabs/by-id/#TAB_ID/evals"] = {
-    usage: 'ls $0',
-    async readdir({path, tabId}) {
-      return { entries: [".", "..",
-                         ...Object.keys(evals[tabId] || {}),
-                         ...Object.keys(evals[tabId] || {}).map(f => f + '.result')] };
+function createWritableDirectory() {
+  const dir = {};
+  return {
+    directory: dir,
+    routeForRoot: {
+      usage: 'ls $0',
+      async readdir({path}) {
+        // get just last component of keys (filename)
+        return { entries: [".", "..",
+                           ...Object.keys(dir).map(
+                             key => key.substr(key.lastIndexOf("/") + 1)
+                           )] };
+      },
+      getattr() {
+        return {
+          st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
+          st_nlink: 3,
+          st_size: 0,
+        };
+      },
     },
-    getattr() {
-      return {
-        st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
-        st_nlink: 3,
-        st_size: 0,
-      };
-    },
+    routeForFilename: {
+      usage: ['echo "2 + 2" > $0',
+              'cat $0.result'],
+
+      async mknod({path, mode}) {
+        dir[path] = '';
+        return {};
+      },
+      async unlink({path}) {
+        delete dir[path];
+        return {};
+      },
+
+      ...routeWithContents(
+        async ({path}) => dir[path],
+        async ({path}, buf) => { dir[path] = buf; }
+      )
+    }
   };
+}
+
+
+(function() {
+  const evals = createWritableDirectory();
+  Routes["/tabs/by-id/#TAB_ID/evals"] = evals.routeForRoot;
   Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
-    usage: ['cat $0.result',
-            'echo "2 + 2" > $0'],
-
-    // NOTE: eval runs in extension's content script, not in original page JS context
-    async mknod({tabId, filename, mode}) {
-      evals[tabId] = evals[tabId] || {};
-      evals[tabId][filename] = { code: '' };
-      return {};
-    },
-    async unlink({tabId, filename}) {
-      delete evals[tabId][filename]; // TODO: also delete evals[tabId] if empty
-      return {};
-    },
-
-    ...routeWithContents(async ({tabId, filename}) => {
-      const name = filename.replace(/\.result$/, '');
-      if (!evals[tabId] || !(name in evals[tabId])) { throw new UnixError(unix.ENOENT); }
-
-      if (filename.endsWith('.result')) {
-        return evals[tabId][name].result || '';
-      } else {
-        return evals[tabId][name].code;
-      }
-    }, async ({tabId, filename}, buf) => {
-      if (filename.endsWith('.result')) {
-        // FIXME: case where they try to write to .result file
-
-      } else {
-        const name = filename;
-        evals[tabId][name].code = buf;
-        evals[tabId][name].result = JSON.stringify((await browser.tabs.executeScript(tabId, {code: buf}))[0]) + '\n';
-      }
-    })
+    ...evals.routeForFilename,
+    async write(req) {
+      const ret = await evals.routeForFilename.write(req);
+      const code = evals.directory[req.path];
+      evals.directory[req.path + '.result'] = JSON.stringify((await browser.tabs.executeScript(req.tabId, {code}))[0]) + '\n';
+      return ret;
+    }
   };
 })();
 (function() {
@@ -638,7 +676,7 @@ Routes["/runtime/routes.html"] = routeWithContents(async () => {
   <body>
     <p>(work in progress)</p>
     <dl>
-      ${Object.entries(Routes).map(([path, {usage, __isInfill}]) => {
+      ` + Object.entries(Routes).map(([path, {usage, __isInfill}]) => {
         if (__isInfill) { return ''; }
         path = path.substring(1); // drop leading /
         let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
@@ -652,7 +690,7 @@ Routes["/runtime/routes.html"] = routeWithContents(async () => {
             </ul>
           </dd>
         `;
-      }).join('\n')}
+      }).join('\n') + `
     </dl>
   </body>
 </html>
@@ -721,6 +759,7 @@ Routes["/runtime/background.js.html"] = routeWithContents(async () => {
   `;
 });
 
+
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever. Basically, you need to start at
 // the deepest level, fill in all the parents 1 level up that don't
@@ -732,17 +771,7 @@ for (let i = 10; i >= 0; i--) {
     path = path.substr(0, path.lastIndexOf("/"));
     if (path == '') path = '/';
 
-    if (!Routes[path]) {
-      function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
-
-      // find all direct children
-      let entries = Object.keys(Routes)
-                          .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
-                          .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0]);
-      entries = [".", "..", ...new Set(entries)];
-
-      Routes[path] = { readdir() { return { entries }; }, __isInfill: true };
-    }
+    if (!Routes[path]) { Routes[path] = routeDirectoryForChildren(path); }
   }
   // I also think it would be better to compute this stuff on the fly,
   // so you could patch more routes in at runtime, but I need to think
@@ -752,12 +781,14 @@ for (let i = 10; i >= 0; i--) {
 
 for (let key in Routes) {
   // /tabs/by-id/#TAB_ID/url.txt -> RegExp \/tabs\/by-id\/(?<int$TAB_ID>[0-9]+)\/url.txt
+  Routes[key].__matchVarCount = 0;
   Routes[key].__regex = new RegExp(
     '^' + key
       .split('/')
       .map(keySegment => keySegment
            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
            .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
+             Routes[key].__matchVarCount++;
              return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>` +
                          (sigil === '#' ? '[0-9]+' : '[^/]+') + `)`;
            }))
@@ -825,13 +856,17 @@ for (let key in Routes) {
   }
 }
 
+// most specific (lowest matchVarCount) routes should match first
+const sortedRoutes = Object.values(Routes).sort((a, b) =>
+  a.__matchVarCount - b.__matchVarCount
+);
 function tryMatchRoute(path) {
   if (path.match(/\/\._[^\/]+$/)) {
     // Apple Double ._whatever file for xattrs
     throw new UnixError(unix.ENOTSUP); 
   }
 
-  for (let route of Object.values(Routes)) {
+  for (let route of sortedRoutes) {
     const vars = route.__match(path);
     if (vars) { return [route, vars]; }
   }
