@@ -68,11 +68,11 @@ const utf8ArrayToString = (function() {
 // global so it can be hot-reloaded
 window.Routes = {};
 
-// Helper function: generates a full set of file operations that you
-// can use as a route handler (so clients can read and write
-// sections of the file, stat it to get its size and see it show up
-// in ls, etc), given getData and setData functions that define the
-// contents of the entire file.
+// Helper function: you provide getData and setData functions that define
+// the contents of an entire file => it returns a proper route handler
+// object with a full set of file operations that you can put in
+// `Routes` (so clients can read and write sections of the file, stat
+// it to get its size and see it show up in ls, etc),
 const makeRouteWithContents = (function() {
   const Cache = {
     // used when you open a file to cache the content we got from the
@@ -166,16 +166,15 @@ const makeRouteWithContents = (function() {
   return makeRouteWithContents;
 })();
 
+// Helper function: returns a route handler for `path` based on all
+// the children of `path` that already exist in Routes.
+// 
+// e.g., if `Routes['/tabs/create']` and `Routes['/tabs/by-id']` and
+// `Routes['/tabs/last-focused']` are all already defined, then
+// `makeDefaultRouteForDirectory('/tabs')` will return a route that
+// defines a directory with entries 'create', 'by-id', and
+// 'last-focused'.
 function makeDefaultRouteForDirectory(path) {
-  // Creates a route for `path` based on all the children of
-  // `path` that already exist in Routes.
-  // 
-  // e.g., if `Routes['/tabs/create']` and `Routes['/tabs/by-id']` and
-  // `Routes['/tabs/last-focused']` are all already defined, then
-  // `makeDefaultRouteForDirectory('/tabs')` will return a route that
-  // defines a directory with entries 'create', 'by-id', and
-  // 'last-focused'.
-  
   function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
   // find all direct children
