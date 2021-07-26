@@ -73,7 +73,7 @@ window.Routes = {};
 // sections of the file, stat it to get its size and see it show up
 // in ls, etc), given getData and setData functions that define the
 // contents of the entire file.
-const routeWithContents = (function() {
+const makeRouteWithContents = (function() {
   const Cache = {
     // used when you open a file to cache the content we got from the
     // browser until you close that file. (so we can respond to
@@ -103,7 +103,7 @@ const routeWithContents = (function() {
     else { return stringOrArray; }
   }
 
-  const routeWithContents = (getData, setData) => ({
+  const makeRouteWithContents = (getData, setData) => ({
     // getData: (req: Request U Vars) -> Promise<contentsOfFile: String|Uint8Array>
     // setData [optional]: (req: Request U Vars, newContentsOfFile: String) -> Promise<>
 
@@ -162,8 +162,8 @@ const routeWithContents = (function() {
       await setData(req, utf8ArrayToString(arr)); return {};
     }
   });
-  routeWithContents.Cache = Cache;
-  return routeWithContents;
+  makeRouteWithContents.Cache = Cache;
+  return makeRouteWithContents;
 })();
 
 function makeDefaultRouteForDirectory(path) {
@@ -260,7 +260,7 @@ Routes["/tabs/by-id"] = {
 // TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
 
 (function() {
-  const routeForTab = (readHandler, writeHandler) => routeWithContents(async ({tabId}) => {
+  const routeForTab = (readHandler, writeHandler) => makeRouteWithContents(async ({tabId}) => {
     const tab = await browser.tabs.get(tabId);
     return readHandler(tab);
 
@@ -268,7 +268,7 @@ Routes["/tabs/by-id"] = {
     await browser.tabs.update(tabId, writeHandler(buf));
   } : undefined);
 
-  const routeFromScript = code => routeWithContents(async ({tabId}) => {
+  const routeFromScript = code => makeRouteWithContents(async ({tabId}) => {
     return (await browser.tabs.executeScript(tabId, {code}))[0];
   });
 
@@ -341,7 +341,7 @@ function createWritableDirectory() {
         return {};
       },
 
-      ...routeWithContents(
+      ...makeRouteWithContents(
         async ({path}) => dir[path],
         async ({path}, buf) => { dir[path] = buf; }
       )
@@ -391,7 +391,7 @@ function createWritableDirectory() {
       return {};
     },
 
-    ...routeWithContents(async ({tabId, expr}) => {
+    ...makeRouteWithContents(async ({tabId, expr}) => {
       if (!watches[tabId] || !(expr in watches[tabId])) { throw new UnixError(unix.ENOENT); }
       return JSON.stringify(await watches[tabId][expr]()) + '\n';
 
@@ -493,7 +493,7 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = routeWithContents(async ({path, tabId, suffix}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = makeRouteWithContents(async ({path, tabId, suffix}) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
     const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
@@ -531,7 +531,7 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
     }
     return scriptInfo;
   }
-  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = routeWithContents(async ({tabId, filename}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = makeRouteWithContents(async ({tabId, filename}) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
@@ -557,7 +557,7 @@ Routes["/tabs/by-id/#TAB_ID/inputs"] = {
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = routeWithContents(async ({tabId, inputId}) => {
+Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = makeRouteWithContents(async ({tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
   const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
@@ -582,7 +582,7 @@ Routes["/windows/last-focused"] = {
   }
 };
 (function() {
-  const withWindow = (readHandler, writeHandler) => routeWithContents(async ({windowId}) => {
+  const withWindow = (readHandler, writeHandler) => makeRouteWithContents(async ({windowId}) => {
     const window = await browser.windows.get(windowId);
     return readHandler(window);
 
@@ -594,7 +594,7 @@ Routes["/windows/last-focused"] = {
     withWindow(window => JSON.stringify(window.focused) + '\n',
                buf => ({ focused: buf.startsWith('true') }));
 })();
-Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...routeWithContents(async ({windowId}) => {
+Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...makeRouteWithContents(async ({windowId}) => {
   // screen capture is a window thing and not a tab thing because you
   // can only capture the visible tab for each window anyway; you
   // can't take a screenshot of just any arbitrary tab
@@ -617,7 +617,7 @@ Routes["/extensions"] = {
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}.${info.id}`)] };
   }
 };
-Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...routeWithContents(async ({extensionId}) => {
+Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...makeRouteWithContents(async ({extensionId}) => {
   const info = await browser.management.get(extensionId);
   return String(info.enabled) + '\n';
 
@@ -658,7 +658,7 @@ Routes["/runtime/reload"] = {
 // deploy any update to background.js.
 Routes["/runtime/background.js"] = {
   usage: '',
-  ...routeWithContents(
+  ...makeRouteWithContents(
     async () => {
       // `window.backgroundJS` is (a Promise of) the source code of
       // the file you're reading right now!
@@ -671,12 +671,12 @@ Routes["/runtime/background.js"] = {
     eval(await window.backgroundJS);
     // TODO: would be better if we could call 'super'.release() so
     // we wouldn't need to involve how Cache works here.
-    routeWithContents.Cache.removeObjectForHandle(fh);
+    makeRouteWithContents.Cache.removeObjectForHandle(fh);
     return {};
   }
 };
 
-Routes["/runtime/routes.html"] = routeWithContents(async () => {
+Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
   // WIP
   const jsLines = (await window.backgroundJS).split('\n');
   function findRouteLineNumber(path) {
@@ -710,7 +710,7 @@ Routes["/runtime/routes.html"] = routeWithContents(async () => {
 `;
 });
 
-Routes["/runtime/background.js.html"] = routeWithContents(async () => {
+Routes["/runtime/background.js.html"] = makeRouteWithContents(async () => {
   // WIP
   const classes = [
     [/Routes\["[^\]]+"\] = /, 'route'],
