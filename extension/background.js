@@ -166,7 +166,16 @@ const routeWithContents = (function() {
   return routeWithContents;
 })();
 
-function routeDirectoryForChildren(path) {
+function makeDefaultRouteForDirectory(path) {
+  // Creates a route for `path` based on all the children of
+  // `path` that already exist in Routes.
+  // 
+  // e.g., if `Routes['/tabs/create']` and `Routes['/tabs/by-id']` and
+  // `Routes['/tabs/last-focused']` are all already defined, then
+  // `makeDefaultRouteForDirectory('/tabs')` will return a route that
+  // defines a directory with entries 'create', 'by-id', and
+  // 'last-focused'.
+  
   function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
   // find all direct children
@@ -179,7 +188,6 @@ function routeDirectoryForChildren(path) {
   entries = [".", "..", ...new Set(entries)];
   return { readdir() { return { entries }; }, __isInfill: true };
 }
-function routeDefer(fn) { return fn; }
 
 Routes["/tabs/create"] = {
   usage: 'echo "https://www.google.com" > $0',
@@ -236,7 +244,7 @@ Routes["/tabs/by-id"] = {
 
 // const tabIdDirectory = createWritableDirectory();
 // Routes["/tabs/by-id/#TAB_ID"] = routeDefer(() => {
-//   const childrenRoute = routeDirectoryForChildren("/tabs/by-id/#TAB_ID");
+//   const childrenRoute = makeDefaultRouteForDirectory("/tabs/by-id/#TAB_ID");
 //   return {
 //     ...tabIdDirectory.routeForRoot, // so getattr is inherited
 //     async readdir(req) {
@@ -295,6 +303,11 @@ Routes["/tabs/by-id"] = {
   };
 })();
 function createWritableDirectory() {
+  // Returns a 'writable directory' object, which represents a
+  // writable directory that users can put arbitrary stuff into. It's
+  // not itself a route, but it has .routeForRoot and
+  // .routeForFilename properties that are routes.
+  
   const dir = {};
   return {
     directory: dir,
@@ -771,7 +784,7 @@ for (let i = 10; i >= 0; i--) {
     path = path.substr(0, path.lastIndexOf("/"));
     if (path == '') path = '/';
 
-    if (!Routes[path]) { Routes[path] = routeDirectoryForChildren(path); }
+    if (!Routes[path]) { Routes[path] = makeDefaultRouteForDirectory(path); }
   }
   // I also think it would be better to compute this stuff on the fly,
   // so you could patch more routes in at runtime, but I need to think
