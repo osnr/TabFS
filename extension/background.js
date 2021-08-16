@@ -1,9 +1,5 @@
 // This file is the heart of TabFS. Each route (synthetic file) is
-// defined by an entry in the Routes object. You can live-edit this
-// file by editing `runtime/background.js` in the mounted TabFS.  I
-// recommend editing the real `extension/background.js` on disk, but
-// setting a hook to copy the file on top of runtime/background.js
-// every time you Save.
+// defined by an entry in the Routes object.
 
 const unix = {
   EPERM: 1,
@@ -189,6 +185,7 @@ function makeDefaultRouteForDirectory(path) {
 }
 
 Routes["/tabs/create"] = {
+  description: 'Create a new tab.',
   usage: 'echo "https://www.google.com" > $0',
   async write({buf}) {
     const url = buf.trim();
@@ -199,6 +196,7 @@ Routes["/tabs/create"] = {
 };
 
 Routes["/tabs/by-title"] = {
+  description: 'Open tabs, organized by title; each subfolder represents an open tab.',
   usage: 'ls $0',
   getattr() {
     return {
@@ -213,9 +211,11 @@ Routes["/tabs/by-title"] = {
   }
 };
 Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
+  description: `Represents one open tab.
+It's a symbolic link to /tabs/by-id/#TAB_ID.`,
   // TODO: date
   usage: ['rm $0'],
-  async readlink({tabId}) { // a symbolic link to /tabs/by-id/[id for this tab]
+  async readlink({tabId}) {
     return { buf: "../by-id/" + tabId };
   },
   async unlink({tabId}) {
@@ -224,7 +224,8 @@ Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
   }
 };
 Routes["/tabs/last-focused"] = {
-  // a symbolic link to /tabs/by-id/[id for this tab]
+  description: `Represents the most recently focused tab.
+It's a symbolic link to /tabs/by-id/[ID of most recently focused tab].`,
   async readlink() {
     const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
     return { buf: "by-id/" + id };
@@ -232,6 +233,7 @@ Routes["/tabs/last-focused"] = {
 };
 
 Routes["/tabs/by-id"] = {
+  description: `Open tabs, organized by ID; each subfolder represents an open tab.`,
   usage: 'ls $0',
   async readdir() {
     const tabs = await browser.tabs.query({});
@@ -272,25 +274,30 @@ Routes["/tabs/by-id"] = {
   });
 
   Routes["/tabs/by-id/#TAB_ID/url.txt"] = {
+    description: `Text file containing the current URL of this tab.`,
     usage: ['cat $0',
             'echo "https://www.google.com" > $0'],
     ...routeForTab(tab => tab.url + "\n",
                    buf => ({ url: buf }))
   };
   Routes["/tabs/by-id/#TAB_ID/title.txt"] = {
+    description: `Text file containing the current title of this tab.`,
     usage: 'cat $0',
     ...routeForTab(tab => tab.title + "\n")
   };
   Routes["/tabs/by-id/#TAB_ID/text.txt"] = {
+    description: `Text file containing the current body text of this tab.`,
     usage: 'cat $0',
     ...routeFromScript(`document.body.innerText`)
   };
   Routes["/tabs/by-id/#TAB_ID/body.html"] = {
+    description: `Text file containing the current body HTML of this tab.`,
     usage: 'cat $0',
     ...routeFromScript(`document.body.innerHTML`)
   };
 
   Routes["/tabs/by-id/#TAB_ID/active"] = {
+    description: 'Text file with `true` or `false` depending on whether this tab is active in its window.',
     usage: ['cat $0',
             'echo true > $0'],
     ...routeForTab(
@@ -688,7 +695,7 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
   <body>
     <p>(work in progress)</p>
     <dl>
-      ` + Object.entries(Routes).map(([path, {usage, __isInfill}]) => {
+      ` + Object.entries(Routes).map(([path, {usage, description, __isInfill}]) => {
         if (__isInfill) { return ''; }
         path = path.substring(1); // drop leading /
         let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
@@ -696,12 +703,13 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
         const href = `https://github.com/osnr/TabFS/blob/master/extension/background.js#L${findRouteLineNumber(path)}`;
         return `
           <dt>${path} (<a href="${href}">source</a>)</dt>
-          <dd>Usage:
+          ${description ? `<dd>Description: ${description}</dd>` :
+                          '<dd style="background-color: #f99">No description!</dd>'}
+          ${usages.length > 0 ? `<dd>Usage:
             <ul>
               ${usages.map(u => `<li>${u}</li>`).join('\n')}
             </ul>
-          </dd>
-        `;
+          </dd>` : '<dd style="background-color: #f99">No usage!</dd>'}`;
       }).join('\n') + `
     </dl>
   </body>
@@ -713,7 +721,8 @@ Routes["/runtime/background.js.html"] = makeRouteWithContents(async () => {
   // WIP
   const classes = [
     [/Routes\["[^\]]+"\] = /, 'route'],
-    [/usage:/, 'usage']
+    [/usage:/, 'usage'],
+    [/description:/, 'description']
   ];
 
   const js = await window.backgroundJS;
@@ -752,7 +761,9 @@ Routes["/runtime/background.js.html"] = makeRouteWithContents(async () => {
       function render() {
         let y = 0;
         for (let line of lines) {
-          if (line.classList.contains('route') || line.classList.contains('usage')) {
+          if (line.classList.contains('route') ||
+              line.classList.contains('usage') ||
+              line.classList.contains('description')) {
             line.style.height = '15px';
             line.style.transform = 'translate(0px, ' + y + 'px)';
             y += 15;
