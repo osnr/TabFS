@@ -697,10 +697,13 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
             </ul>
           </dd>` : '<dd style="background-color: #f99">No usage found!</dd>'}
           ${lineRange ?
-            `<details>
-              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]}-L${lineRange[1]}">on GitHub</a>)
-              <pre>${jsLines[lineRange[0] - 1]}</pre>
-            </details>` : '<dd style="background-color: #f99">No source code found!</dd>'}
+            `<dd><details>
+              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]}-L${lineRange[1]}">on GitHub</a>)</summary>
+              <pre><code>${
+                jsLines[lineRange[0] - 1]
+                // FIXME: get entire range; escape for HTML
+              }</code></pre>
+            </details></dd>` : '<dd style="background-color: #f99">No source code found!</dd>'}
         `;
       }).join('\n') + `
     </dl>
