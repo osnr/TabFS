@@ -659,35 +659,22 @@ Routes["/runtime/reload"] = {
   });
 })();
 
-// added at first to make development on Safari less painful: Safari
-// normally requires you to recompile the whole Xcode project to
-// deploy any update to background.js.
-Routes["/runtime/background.js"] = {
-  usage: '',
-  ...makeRouteWithContents(
-    async () => {
-      // `window.backgroundJS` is (a Promise of) the source code of
-      // the file you're reading right now!
-      return window.backgroundJS;
-    },
-    async ({}, buf) => { window.backgroundJS = buf; }
-  ),
-  async release({fh}) {
-    // Note that we eval on release, not on write.
-    eval(await window.backgroundJS);
-    // TODO: would be better if we could call 'super'.release() so
-    // we wouldn't need to involve how Cache works here.
-    makeRouteWithContents.Cache.removeObjectForHandle(fh);
-    return {};
-  }
-};
-
 Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
   // WIP
   const jsLines = (await window.backgroundJS).split('\n');
-  function findRouteLineNumber(path) {
+  function findRouteLineRange(path) {
+    console.log('frlr', path);
     for (let i = 0; i < jsLines.length; i++) {
-      if (jsLines[i].includes(path)) { return i + 1; }
+      if (jsLines[i].includes(`Routes["${path}"] = `)) { return [
+        i + 1, // + 1 because GitHub line numbers are 1-indexed
+        (function() {
+          // TODO:
+          // find the first bracket on that line after the =
+          // walk forward until we find the corresponding match for it
+          // that's the last line?
+          return i + 2;
+        })()
+      ]; }
     }
   }
   return `
@@ -697,91 +684,30 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
     <dl>
       ` + Object.entries(Routes).map(([path, {usage, description, __isInfill}]) => {
         if (__isInfill) { return ''; }
-        path = path.substring(1); // drop leading /
         let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
-        usages = usages.map(u => u.replace('\$0', path));
-        const href = `https://github.com/osnr/TabFS/blob/master/extension/background.js#L${findRouteLineNumber(path)}`;
+        usages = usages.map(u => u.replace('\$0', path.substring(1) /* drop leading / */));
+        const lineRange = findRouteLineRange(path);
         return `
-          <dt>${path} (<a href="${href}">source</a>)</dt>
+          <dt>${path.substring(1)}</dt>
           ${description ? `<dd>Description: ${description}</dd>` :
-                          '<dd style="background-color: #f99">No description!</dd>'}
+                          '<dd style="background-color: #f99">No description found!</dd>'}
           ${usages.length > 0 ? `<dd>Usage:
             <ul>
               ${usages.map(u => `<li>${u}</li>`).join('\n')}
             </ul>
-          </dd>` : '<dd style="background-color: #f99">No usage!</dd>'}`;
+          </dd>` : '<dd style="background-color: #f99">No usage found!</dd>'}
+          ${lineRange ?
+            `<details>
+              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]}-L${lineRange[1]}">on GitHub</a>)
+              <pre>${jsLines[lineRange[0] - 1]}</pre>
+            </details>` : '<dd style="background-color: #f99">No source code found!</dd>'}
+        `;
       }).join('\n') + `
     </dl>
   </body>
 </html>
 `;
 });
-
-Routes["/runtime/background.js.html"] = makeRouteWithContents(async () => {
-  // WIP
-  const classes = [
-    [/Routes\["[^\]]+"\] = /, 'route'],
-    [/usage:/, 'usage'],
-    [/description:/, 'description']
-  ];
-
-  const js = await window.backgroundJS;
-  const classedJs =
-    js.split('\n')
-        .map((line, i) => {
-          const class_ = classes.find(([re, class_]) => re.test(line));
-          line = line
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-          if (!class_) { return `<div class="normal line">${line}</div>`; }
-          return `<div class="${class_[1]} line">${line}</div>`;
-        })
-        .join('');
-
-  return `
-<html>
-  <head>
-    <style>
-      body { overflow-x: hidden; }
-      .route { background-color: rgb(255, 196, 196); }
-      .line { position: absolute; height: 15px; width: 100%; }
-      .line { transition: height 0.5s cubic-bezier(0.64, 0.08, 0.24, 1), transform 0.5s cubic-bezier(0.64, 0.08, 0.24, 1); }
-    </style>
-  </head>
-  <body>
-    <p>(very work in progress)</p>
-
-    <pre><code>${classedJs}</code></pre>
-   
-    <script>
-      const lines = [...document.querySelectorAll('div.line')];
-      function render() {
-        let y = 0;
-        for (let line of lines) {
-          if (line.classList.contains('route') ||
-              line.classList.contains('usage') ||
-              line.classList.contains('description')) {
-            line.style.height = '15px';
-            line.style.transform = 'translate(0px, ' + y + 'px)';
-            y += 15;
-
-          } else {
-            line.style.height = '15px';
-            line.style.transform = 'translate(0px, ' + (y - 7.5) + 'px) scaleY(' + 2/15 + ')';
-            y += 2;
-          }
-        }
-      }
-      render();
-    </script>
-  </body>
-</html>
-  `;
-});
-
 
 // Ensure that there are routes for all ancestors. This algorithm is
 // probably not correct, but whatever. Basically, you need to start at
