@@ -641,44 +641,41 @@ Routes["/runtime/reload"] = {
   truncate() { return {}; }
 };
 
-(function() {
-  // window.__backgroundJS needs to be a global because we want its
-  // value (the changed JS text) to survive even as this whole file
-  // gets re-evaluated.
-  window.__backgroundJS = window.__backgroundJS || false;
-  Object.defineProperty(window, 'backgroundJS', {
-    async get() {
-      if (!window.__backgroundJS) {
-        window.__backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
-          .then(r => r.text());
-      }
-      return window.__backgroundJS;
-    },
-    set(js) { window.__backgroundJS = js; },
-    configurable: true // so we can rerun this on hot reload
-  });
-})();
-
 Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
   // WIP
-  const jsLines = (await window.backgroundJS).split('\n');
+  if (!window.__backgroundJS) {
+    window.__backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
+      .then(r => r.text());
+  }
+  const jsLines = (window.__backgroundJS).split('\n');
   function findRouteLineRange(path) {
-    console.log('frlr', path);
     for (let i = 0; i < jsLines.length; i++) {
-      if (jsLines[i].includes(`Routes["${path}"] = `)) { return [
-        i + 1, // + 1 because GitHub line numbers are 1-indexed
-        (function() {
-          // TODO:
-          // find the first bracket on that line after the =
-          // walk forward until we find the corresponding match for it
-          // that's the last line?
-          return i + 2;
-        })()
-      ]; }
+      if (jsLines[i].includes(`Routes["${path}"] = `)) {
+        if (jsLines[i].match(/;/)) { return [i, i]; } // hacky: if it's a one-liner
+        const [_, startBracket] = jsLines[i].match(/Routes\[[^\]]*\] = [^\(\{]*([\(\{])/);
+
+        const endBracket = ({'(': ')', '{': '}'})[startBracket];
+        let counter = 1;
+        for (let j = i + 1; j < jsLines.length; j++) {
+          for (let k = 0; k < jsLines[j].length; k++) {
+            if (jsLines[j][k] === startBracket) { counter++; }
+            else if (jsLines[j][k] === endBracket) { counter--; }
+
+            if (counter === 0) { return [i, j]; }
+          }
+        }
+        return null; // did not find
+      }
     }
+    return null; // did not find
   }
   return `
 <html>
+  <head>
+    <style>
+      dt:not(:first-of-type) { margin-top: 1em; }
+    </style>
+  </head>
   <body>
     <p>(work in progress)</p>
     <dl>
@@ -698,10 +695,10 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
           </dd>` : '<dd style="background-color: #f99">No usage found!</dd>'}
           ${lineRange ?
             `<dd><details>
-              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]}-L${lineRange[1]}">on GitHub</a>)</summary>
+              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]+1}-L${lineRange[1]+1}">on GitHub</a>)</summary>
               <pre><code>${
-                jsLines[lineRange[0] - 1]
-                // FIXME: get entire range; escape for HTML
+                jsLines.slice(lineRange[0], lineRange[1] + 1).join('\n')
+                // FIXME: escape for HTML
               }</code></pre>
             </details></dd>` : '<dd style="background-color: #f99">No source code found!</dd>'}
         `;
@@ -864,9 +861,6 @@ async function onMessage(req) {
 };
 
 function tryConnect() {
-  // so we don't try to reconnect if we're hot-swapping background.js.
-  if (window.isConnected) return;
-
   // Safari is very weird -- it has this native app that we have to talk to,
   // so we poke that app to wake it up, get it to start the TabFS process
   // and boot a WebSocket, then connect to it.
@@ -888,8 +882,6 @@ function tryConnect() {
 
         setTimeout(() => {
           if (socket.readyState === 1) {
-            window.isConnected = true;
-
           } else {
             console.log('ws connection failed, retrying in', checkAfterTime);
             connectSocket(checkAfterTime * 2);
@@ -902,10 +894,8 @@ function tryConnect() {
   }
   
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
-  window.isConnected = true;
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {
-    window.isConnected = false;
     console.log('disconnect', p);
   });
 }
