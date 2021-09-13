@@ -641,23 +641,28 @@ Routes["/runtime/reload"] = {
   truncate() { return {}; }
 };
 
+window.fetch(chrome.runtime.getURL('background.js'))
+  .then(async r => { window.__backgroundJS = await r.text(); });
+
 Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
+  if (!window.__backgroundJS) throw new UnixError(unix.EIO);
+
   // WIP
-  if (!window.__backgroundJS) {
-    window.__backgroundJS = await window.fetch(chrome.runtime.getURL('background.js'))
-      .then(r => r.text());
-  }
   const jsLines = (window.__backgroundJS).split('\n');
   function findRouteLineRange(path) {
     for (let i = 0; i < jsLines.length; i++) {
       if (jsLines[i].includes(`Routes["${path}"] = `)) {
         if (jsLines[i].match(/;/)) { return [i, i]; } // hacky: if it's a one-liner
-        const [_, startBracket] = jsLines[i].match(/Routes\[[^\]]*\] = [^\(\{]*([\(\{])/);
+        const result = jsLines[i].match(/Routes\[[^\]]*\] = [^\(\{]*([\(\{])/);
+        const startBracket = result[1];
+        const startBracketIndex = result.index + result[0].length;
 
         const endBracket = ({'(': ')', '{': '}'})[startBracket];
         let counter = 1;
-        for (let j = i + 1; j < jsLines.length; j++) {
-          for (let k = 0; k < jsLines[j].length; k++) {
+        for (let j = i; j < jsLines.length; j++) {
+          for (let k = (j === i) ? startBracketIndex + 1 : 0;
+               k < jsLines[j].length;
+               k++) {
             if (jsLines[j][k] === startBracket) { counter++; }
             else if (jsLines[j][k] === endBracket) { counter--; }
 
