@@ -49,12 +49,18 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/Library/Application Support/Chromium/NativeMessagingHosts";;
     "Darwin vivaldi")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Vivaldi/NativeMessagingHosts";;
+    "CYGWIN_NT"*)
+        MANIFEST_LOCATION="$PWD/fs";;
 esac
 
 mkdir -p "$MANIFEST_LOCATION"
 
 APP_NAME="com.rsnous.tabfs"
 EXE_PATH=$(pwd)/fs/tabfs
+if [[ "$OS" == CYGWIN_NT* ]]; then
+    # convert to native path and json-escape backslashes
+    EXE_PATH="$(cygpath -w "$EXE_PATH" | sed 's:\\:\\\\:g')"
+fi
 
 case "$BROWSER" in
     chrome | chromium | chromebeta | brave | vivaldi | edgedev)
@@ -82,5 +88,15 @@ EOF
 EOF
         );;
 esac
+
+if [[ "$OS" == CYGWIN_NT* ]]; then
+    case "$BROWSER" in
+        chrome | chromium | chromebeta | brave | vivaldi | edgedev)
+            REGKEY="HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\$APP_NAME";;
+        firefox)
+            REGKEY="HKCU\\Software\\Mozilla\\NativeMessagingHosts\\$APP_NAME";;
+    esac
+    reg add "$REGKEY" /ve /t REG_SZ /d "$(cygpath -w "$MANIFEST_LOCATION")\\$APP_NAME.json" /f
+fi
 
 echo "$MANIFEST" > "$MANIFEST_LOCATION/$APP_NAME.json"

@@ -18,6 +18,16 @@
 #include "vendor/frozen.h"
 #include "vendor/frozen.c"
 
+static unsigned int get_thread_id(void) {
+#if defined(__CYGWIN__)
+    // note: using this because pthread_self() didn't seem to be unique under cygwin
+    extern int GetCurrentThreadId(void);
+    return GetCurrentThreadId();
+#else
+    return (uintptr_t)pthread_self();
+#endif
+}
+
 #define eprintln(fmt, ...) fprintf(stderr, fmt "\n", ##__VA_ARGS__)
 
 // protects:
@@ -115,8 +125,11 @@ static int do_exchange(unsigned int id,
     char c;
     read_or_die(mydata.msgpipe[0], &c, 1);
 
+    // note: protecting this with the same lock fixes random fd-related crashes under cygwin
+    pthread_mutex_lock(&write_lock);
     close(mydata.msgpipe[0]);
     close(mydata.msgpipe[1]);
+    pthread_mutex_unlock(&write_lock);
 
     int err;
     if (1 == json_scanf(mydata.data, mydata.size, "{error: %d}", &err)) {
@@ -185,7 +198,7 @@ static int count_fmt_args(const char *s) {
 
 #define exchange_json(datap, sizep, keys_fmt, ...) \
     do { \
-        unsigned int id = (uintptr_t)pthread_self(); \
+        unsigned int id = get_thread_id(); \
         int req_rv = do_exchange(id, datap, sizep, \
             "{id: %u, " keys_fmt "}", \
             id, ##__VA_ARGS__); \
@@ -206,7 +219,7 @@ static int count_fmt_args(const char *s) {
                 free(data); data = NULL; \
             } else { \
                 eprintln("%s: could only parse %d of %d keys!", \
-                    __func__, num_expected, num_scanned); \
+                    __func__, num_scanned, num_expected); \
                 free(data); data = NULL; \
                 return -EIO; \
             } \
@@ -224,6 +237,11 @@ static int tabfs_getattr(const char *path, struct stat *stbuf) {
     parse_and_free_response(rdata, rsize,
         "st_mode: %d, st_nlink: %d, st_size: %d",
         &stbuf->st_mode, &stbuf->st_nlink, &stbuf->st_size);
+
+#if defined(CYGFUSE)
+    // user must be set for writing files to work under cygwin
+    stbuf->st_uid = geteuid();
+#endif
 
     return 0;
 }
@@ -452,6 +470,7 @@ int main(int argc, char **argv) {
     freopen("log.txt", "a", stderr);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+#if !defined(CYGFUSE)
     char killcmd[128];
     sprintf(killcmd, "pgrep tabfs | grep -v %d | xargs kill -9 2>/dev/null", getpid());
     system(killcmd);
@@ -465,6 +484,17 @@ int main(int argc, char **argv) {
 #endif
 
     system("mkdir -p \"$TABFS_MOUNT_DIR\"");
+#endif
+
+#if defined(CYGFUSE)
+    // winfsp-fuse needs to create the mount directory itself
+    // try to remove it using rmdir (will work if it's empty)
+    if (0 == access(getenv("TABFS_MOUNT_DIR"), R_OK) &&
+        0 != rmdir(getenv("TABFS_MOUNT_DIR"))) {
+        eprintln("error: the mount directory \"%s\" already exists!", getenv("TABFS_MOUNT_DIR"));
+        return 1;
+    }
+#endif
 
     pthread_t thread;
     int err = pthread_create(&thread, NULL, reader_main, NULL);
