@@ -675,22 +675,26 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
     return null; // did not find
   }
   return `
+<!doctype html>
 <html>
   <head>
+    <meta charset="utf-8">
     <style>
       dt:not(:first-of-type) { margin-top: 1em; }
     </style>
   </head>
   <body>
+    <p>This page is automatically generated from <a href="https://github.com/osnr/TabFS/blob/master/extension/background.js">extension/background.js in the TabFS source code</a>.</p>
+    <p>It documents each of the folders and files that TabFS serves up from your browser.</p>
     <p>(work in progress)</p>
     <dl>
-      ` + Object.entries(Routes).map(([path, {usage, description, __isInfill}]) => {
+      ` + Object.entries(Routes).map(([path, {usage, description, __isInfill, readdir}]) => {
         if (__isInfill) { return ''; }
         let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
         usages = usages.map(u => u.replace('\$0', path.substring(1) /* drop leading / */));
         const lineRange = findRouteLineRange(path);
         return `
-          <dt>${path.substring(1)}</dt>
+          <dt>${readdir ? '&#x1F4C1;' : '&#x1F4C4;'} ${path.substring(1)}</dt>
           ${description ? `<dd>Description: ${description}</dd>` :
                           '<dd style="background-color: #f99">No description found!</dd>'}
           ${usages.length > 0 ? `<dd>Usage:
