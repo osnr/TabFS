@@ -212,7 +212,7 @@ Routes["/tabs/by-title"] = {
 };
 Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
   description: `Represents one open tab.
-It's a symbolic link to /tabs/by-id/#TAB_ID.`,
+It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
   // TODO: date
   usage: ['rm $0'],
   async readlink({tabId}) {
@@ -225,7 +225,7 @@ It's a symbolic link to /tabs/by-id/#TAB_ID.`,
 };
 Routes["/tabs/last-focused"] = {
   description: `Represents the most recently focused tab.
-It's a symbolic link to /tabs/by-id/[ID of most recently focused tab].`,
+It's a symbolic link to the folder /tabs/by-id/[ID of most recently focused tab].`,
   async readlink() {
     const id = (await browser.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
     return { buf: "by-id/" + id };
@@ -297,7 +297,7 @@ Routes["/tabs/by-id"] = {
   };
 
   Routes["/tabs/by-id/#TAB_ID/active"] = {
-    description: 'Text file with `true` or `false` depending on whether this tab is active in its window.',
+    description: 'Text file containing `true` or `false` depending on whether this tab is active in its window.',
     usage: ['cat $0',
             'echo true > $0'],
     ...routeForTab(
@@ -318,7 +318,6 @@ function createWritableDirectory() {
   return {
     directory: dir,
     routeForRoot: {
-      usage: 'ls $0',
       async readdir({path}) {
         // get just last component of keys (filename)
         return { entries: [".", "..",
@@ -335,9 +334,6 @@ function createWritableDirectory() {
       },
     },
     routeForFilename: {
-      usage: ['echo "2 + 2" > $0',
-              'cat $0.result'],
-
       async mknod({path, mode}) {
         dir[path] = '';
         return {};
@@ -358,9 +354,16 @@ function createWritableDirectory() {
 
 (function() {
   const evals = createWritableDirectory();
-  Routes["/tabs/by-id/#TAB_ID/evals"] = evals.routeForRoot;
+  Routes["/tabs/by-id/#TAB_ID/evals"] = {
+    ...evals.routeForRoot,
+    description: `Add JavaScript files to this folder to evaluate them in the tab.`,
+    usage: 'ls $0'
+  };
   Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
     ...evals.routeForFilename,
+    // FIXME: use $0 here
+    usage: ['echo "2 + 2" > tabs/by-id/#TAB_ID/evals/twoplustwo.js',
+            'cat tabs/by-id/#TAB_ID/evals/twoplustwo.js.result'],
     async write(req) {
       const ret = await evals.routeForFilename.write(req);
       const code = evals.directory[req.path];
@@ -372,6 +375,9 @@ function createWritableDirectory() {
 (function() {
   const watches = {};
   Routes["/tabs/by-id/#TAB_ID/watches"] = {
+    description: `Put a file in this folder with a JS expression as its filename.
+Read that file to evaluate and return the current value of that JS expression.`,
+    usage: 'ls $0',
     async readdir({tabId}) {
       return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
     },
@@ -384,6 +390,8 @@ function createWritableDirectory() {
     },
   };
   Routes["/tabs/by-id/#TAB_ID/watches/:EXPR"] = {
+    description: `A file with a JS expression :EXPR as its filename.`,
+    usage: `touch '/tabs/by-id/#TAB_ID/watches/2+2' && cat '/tabs/by-id/#TAB_ID/watches/2+2'`,
     // NOTE: eval runs in extension's content script, not in original page JS context
     async mknod({tabId, expr, mode}) {
       watches[tabId] = watches[tabId] || {};
@@ -410,14 +418,16 @@ function createWritableDirectory() {
 })();
 
 Routes["/tabs/by-id/#TAB_ID/window"] = {
-  // a symbolic link to /windows/[id for this window]
+  description: `The window that this tab lives in;
+a symbolic link to the folder /windows/[id for this window].`,
   async readlink({tabId}) {
     const tab = await browser.tabs.get(tabId);
     return { buf: "../../../windows/" + tab.windowId };
   }
 };
 Routes["/tabs/by-id/#TAB_ID/control"] = {
-  // see https://developer.chrome.com/extensions/tabs
+  description: `Write control commands to this file to control this tab;
+see https://developer.chrome.com/extensions/tabs.`,
   usage: ['echo remove > $0',
           'echo reload > $0',
           'echo goForward > $0',
@@ -555,6 +565,7 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
 })();
 
 Routes["/tabs/by-id/#TAB_ID/inputs"] = {
+  description: `Contains a file for each text input and textarea on this page (as long as it has an ID, currently).`,
   async readdir({tabId}) {
     // TODO: assign new IDs to inputs without them?
     const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
@@ -581,7 +592,7 @@ Routes["/windows"] = {
   }
 };
 Routes["/windows/last-focused"] = {
-  // a symbolic link to /windows/[id for this window]
+  description: `A symbolic link to /windows/[id for the last focused window].`,
   async readlink() {
     const windowId = (await browser.windows.getLastFocused()).id;
     return { buf: windowId };
@@ -681,11 +692,14 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
     <meta charset="utf-8">
     <style>
       dt:not(:first-of-type) { margin-top: 1em; }
+      .description { font-style: italic; }
+      summary { color: #555; }
     </style>
   </head>
   <body>
     <p>This page is automatically generated from <a href="https://github.com/osnr/TabFS/blob/master/extension/background.js">extension/background.js in the TabFS source code</a>.</p>
     <p>It documents each of the folders and files that TabFS serves up from your browser.</p>
+    <p>Variables here, like :TAB_TITLE and #TAB_ID, are stand-ins for concrete values of what you actually have open in your browser.</p>
     <p>(work in progress)</p>
     <dl>
       ` + Object.entries(Routes).map(([path, {usage, description, __isInfill, readdir}]) => {
@@ -695,13 +709,13 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
         const lineRange = findRouteLineRange(path);
         return `
           <dt>${readdir ? '&#x1F4C1;' : '&#x1F4C4;'} ${path.substring(1)}</dt>
-          ${description ? `<dd>Description: ${description}</dd>` :
+          ${description ? `<dd class="description">${description}</dd>` :
                           '<dd style="background-color: #f99">No description found!</dd>'}
-          ${usages.length > 0 ? `<dd>Usage:
+          ${usages.length > 0 ? `<dd><details><summary>Usage examples</summary>
             <ul>
               ${usages.map(u => `<li>${u}</li>`).join('\n')}
             </ul>
-          </dd>` : '<dd style="background-color: #f99">No usage found!</dd>'}
+          </details></dd>` : '<dd style="background-color: #f99">No usage examples found!</dd>'}
           ${lineRange ?
             `<dd><details>
               <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]+1}-L${lineRange[1]+1}">on GitHub</a>)</summary>
