@@ -362,12 +362,16 @@ function createWritableDirectory() {
   Routes["/tabs/by-id/#TAB_ID/evals/:FILENAME"] = {
     ...evals.routeForFilename,
     // FIXME: use $0 here
+    // FIXME: document allFrames option
     usage: ['echo "2 + 2" > tabs/by-id/#TAB_ID/evals/twoplustwo.js',
             'cat tabs/by-id/#TAB_ID/evals/twoplustwo.js.result'],
     async write(req) {
       const ret = await evals.routeForFilename.write(req);
       const code = evals.directory[req.path];
-      evals.directory[req.path + '.result'] = JSON.stringify((await browser.tabs.executeScript(req.tabId, {code}))[0]) + '\n';
+      const allFrames = req.path.endsWith('.all-frames.js');
+      // TODO: return other results beyond [0] (when all-frames is on)
+      const result = (await browser.tabs.executeScript(req.tabId, {code, allFrames}))[0];
+      evals.directory[req.path + '.result'] = JSON.stringify(result) + '\n';
       return ret;
     }
   };
@@ -699,7 +703,7 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
   <body>
     <p>This page is automatically generated from <a href="https://github.com/osnr/TabFS/blob/master/extension/background.js">extension/background.js in the TabFS source code</a>.</p>
     <p>It documents each of the folders and files that TabFS serves up from your browser.</p>
-    <p>Variables here, like :TAB_TITLE and #TAB_ID, are stand-ins for concrete values of what you actually have open in your browser.</p>
+    <p>Variables in this document, like :TAB_TITLE and #TAB_ID, are stand-ins for concrete values of what you actually have open in your browser in a running TabFS.</p>
     <p>(work in progress)</p>
     <dl>
       ` + Object.entries(Routes).map(([path, {usage, description, __isInfill, readdir}]) => {
