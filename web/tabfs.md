@@ -51,7 +51,7 @@ they map to 3 folders in TabFS</p>
 </div>
 
 The files inside a tab's folder directly reflect (and can control) the
-state of that tab in your browser. (TODO: update as I add more)
+state of that tab in your browser.
 
 <div class="figure">
 <video autoplay loop muted>
@@ -61,6 +61,11 @@ state of that tab in your browser. (TODO: update as I add more)
 example, the url.txt, text.txt, and title.txt files tell me those live
 properties of this tab</p>
 </div>
+
+<!-- for now, I am copying routes.html into web/ locally before I -->
+<!-- deploy the site. need to find a better way? -->
+<strong><a href="routes.html">(Read more up-to-date documentation for all of
+TabFS's files here.)</a></strong>
 
 This gives you a _ton_ of power, because now you can apply [all the
 existing tools](https://twitter.com/rsnous/status/1018570020324962305)
