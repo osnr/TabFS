@@ -628,6 +628,24 @@ Routes["/windows"] = {
     return { entries: [".", "..", ...windows.map(window => String(window.id))] };
   }
 };
+
+Routes["/windows/#WINDOW_ID/tabs"] = {
+  async readdir({windowId}) {
+    const tabs = await browser.tabs.query({windowId});
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title) + "." + String(tab.id))) ] }
+  }
+}
+
+Routes["/windows/#WINDOW_ID/tabs/:TAB_TITLE.#TAB_ID"] = {
+  async readlink({tabId}) {
+    return { buf: "../../../tabs/by-id/" + tabId };
+  },
+  async unlink({tabId}) {
+    await browser.tabs.remove(tabId);
+    return {};
+  }
+}
+
 Routes["/windows/last-focused"] = {
   description: `A symbolic link to /windows/[id for the last focused window].`,
   async readlink() {
@@ -635,6 +653,7 @@ Routes["/windows/last-focused"] = {
     return { buf: windowId };
   }
 };
+
 (function() {
   const withWindow = (readHandler, writeHandler) => makeRouteWithContents(async ({windowId}) => {
     const window = await browser.windows.get(windowId);
