@@ -210,6 +210,7 @@ Routes["/tabs/by-title"] = {
     return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title)) + "." + String(tab.id))] };
   }
 };
+
 Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
   description: `Represents one open tab.
 It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
@@ -223,6 +224,38 @@ It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
     return {};
   }
 };
+
+Routes["/tabs/by-window"] = {
+  description: 'Open tabs, organized by window then title; each subfolder represents an open tab.',
+  usage: 'ls $0',
+  getattr() {
+    return {
+      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_nlink: 3,
+      st_size: 0,
+    };
+  },
+  async readdir() {
+    const tabs = await browser.tabs.query({});
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.windowId) + "." + String(tab.title)) + "." + String(tab.id))] };
+  }
+};
+
+Routes["/tabs/by-window/#TAB_WINDOW_ID.:TAB_TITLE.#TAB_ID"] = {
+  description: `Represents one open tab.
+It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
+  // TODO: date
+  usage: ['rm $0'],
+  async readlink({tabId}) {
+    return { buf: "../by-id/" + tabId };
+  },
+  async unlink({tabId}) {
+    await browser.tabs.remove(tabId);
+    return {};
+  }
+};
+
+
 Routes["/tabs/last-focused"] = {
   description: `Represents the most recently focused tab.
 It's a symbolic link to the folder /tabs/by-id/[ID of most recently focused tab].`,
@@ -595,6 +628,24 @@ Routes["/windows"] = {
     return { entries: [".", "..", ...windows.map(window => String(window.id))] };
   }
 };
+
+Routes["/windows/#WINDOW_ID/tabs"] = {
+  async readdir({windowId}) {
+    const tabs = await browser.tabs.query({windowId});
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title) + "." + String(tab.id))) ] }
+  }
+}
+
+Routes["/windows/#WINDOW_ID/tabs/:TAB_TITLE.#TAB_ID"] = {
+  async readlink({tabId}) {
+    return { buf: "../../../tabs/by-id/" + tabId };
+  },
+  async unlink({tabId}) {
+    await browser.tabs.remove(tabId);
+    return {};
+  }
+}
+
 Routes["/windows/last-focused"] = {
   description: `A symbolic link to /windows/[id for the last focused window].`,
   async readlink() {
@@ -602,6 +653,7 @@ Routes["/windows/last-focused"] = {
     return { buf: windowId };
   }
 };
+
 (function() {
   const withWindow = (readHandler, writeHandler) => makeRouteWithContents(async ({windowId}) => {
     const window = await browser.windows.get(windowId);
