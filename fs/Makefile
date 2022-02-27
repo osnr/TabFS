@@ -22,6 +22,10 @@ ifeq ($(shell uname -s),FreeBSD)
 	CFLAGS += -L$(FREEBSD_ROOT)/lib -I$(FREEBSD_ROOT)/include $(CFLAGS_EXTRA)
 	LIBS = -lfuse -pthread
 endif
+ifeq ($(shell uname -o),Cygwin)
+	CFLAGS += $(shell pkg-config --cflags fuse)
+	LIBS = $(shell pkg-config --libs fuse)
+endif
 
 all: $(TARGETS)
 
