@@ -61,6 +61,26 @@ const utf8ArrayToString = (function() {
   return utf8 => decoder.decode(utf8);
 })();
 
+// btoa cannot be used on Uint8Arrays or strings containing utf8 characters.
+// This is the best solution per https://stackoverflow.com/a/66046176
+const utf8ArrayToBase64 = async (data) => {
+    if(data.length == 0) return '';
+
+    // Use a FileReader to generate a base64 data URI
+    const base64url = await new Promise((r) => {
+        const reader = new FileReader()
+        reader.onload = () => r(reader.result)
+        reader.readAsDataURL(new Blob([data]))
+    });
+
+    /*
+    The result looks like
+    "data:application/octet-stream;base64,<your base64 data>", 
+    so we split off the beginning:
+    */
+    return base64url.split(",", 2)[1]
+};
+
 // global so it can be hot-reloaded
 window.Routes = {};
 
@@ -127,7 +147,7 @@ const makeRouteWithContents = (function() {
       return { fh: Cache.storeObject(req.path, toUtf8Array(data)) };
     },
     async read({fh, size, offset}) {
-      return { buf: String.fromCharCode(...Cache.getObjectForHandle(fh).slice(offset, offset + size)) };
+      return { buf: Cache.getObjectForHandle(fh).slice(offset, offset + size) };
     },
     async write(req) {
       const {fh, offset, buf} = req;
@@ -919,7 +939,13 @@ async function onMessage(req) {
     const [route, vars] = tryMatchRoute(req.path);
     response = await route[req.op]({...req, ...vars});
     response.op = req.op;
-    if (response.buf) { response.buf = btoa(response.buf); }
+    if (response.buf) {
+      if (response.buf instanceof Uint8Array) {
+        response.buf = await utf8ArrayToBase64(response.buf);
+      } else {
+        response.buf = btoa(response.buf);
+      }
+    }
 
   } catch (e) {
     console.error(e);
