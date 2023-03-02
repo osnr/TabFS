@@ -7,6 +7,7 @@ if [[ "$#" -lt 1 || (
           ! ( ( "$1" == "firefox" && "$#" -eq 1 ) ||
               ( "$1" == "brave" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
+              ( "$1" == "arc" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "vivaldi" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromebeta" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32 ) ||
@@ -15,7 +16,7 @@ if [[ "$#" -lt 1 || (
     echo "Usage: $0 <chrome EXTENSION_ID | firefox |
                      chromebeta EXTENSION_ID | chromium EXTENSION_ID |
                      vivaldi EXTENSION_ID | edgedev EXTENSION_ID |
-                     brave EXTENSION_ID | opera EXTENSION_ID>"
+                     brave EXTENSION_ID | opera EXTENSION_ID | arc EXTENSION_ID>"
     exit 2
 fi
 
@@ -53,6 +54,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/Library/Application Support/Chromium/NativeMessagingHosts";;
     "Darwin vivaldi")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Vivaldi/NativeMessagingHosts";;
+    "Darwin arc")
+        MANIFEST_LOCATION="$HOME/Library/Application Support/Arc/User Data/NativeMessagingHosts";;
 esac
 
 mkdir -p "$MANIFEST_LOCATION"
@@ -61,7 +64,7 @@ APP_NAME="com.rsnous.tabfs"
 EXE_PATH=$(pwd)/fs/tabfs
 
 case "$BROWSER" in
-    chrome | chromium | chromebeta | brave | vivaldi | edgedev | opera)
+    chrome | chromium | chromebeta | brave | vivaldi | edgedev | opera | arc)
         EXTENSION_ID=$2
         MANIFEST=$(cat <<EOF
 {
