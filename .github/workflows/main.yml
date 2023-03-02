@@ -1,0 +1,36 @@
+name: CI
+on:
+  # Trigger for pushes to all branches
+  push:
+  # Triggers the workflow for PRs to the master branch
+  pull_request:
+    branches: [ master ]
+  # Manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            fuse_install_cmd: 'sudo apt-get install libfuse-dev'
+          - os: macos-latest
+            fuse_install_cmd: 'brew update && brew install --cask macfuse'
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install FUSE
+        run: ${{ matrix.fuse_install_cmd }}
+
+      - name: Compile FUSE native messaging host
+        run: cd fs && make
+
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v2
+        with:
+          name: tabfs-${{ matrix.os }}
+          path: fs/tabfs
