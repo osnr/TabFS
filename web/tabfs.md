@@ -134,6 +134,19 @@ or (older / more explicit)
 $ echo remove | tee -a mnt/tabs/by-title/*Stack_Overflow*/control
 ```
 
+### Open new Tabs
+just:
+
+```
+$ echo about:blank > mnt/tabs/create
+```
+
+or in a specific window:
+
+```
+$ about:blank > windows/<ID>/crate
+```
+
 #### btw
 
 (this task, removing all tabs whose titles contain some string, is a

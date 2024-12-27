@@ -473,7 +473,14 @@ Read that file to evaluate and return the current value of that JS expression.`,
     })
   };
 })();
-
+Routes["/windows/#WINDOW_ID/crate"] = {
+    async write({windowId, buf}) {
+        const url = buf.trim();
+        await browser.tabs.create({ windowId: windowId, url: url });
+        return {size: stringToUtf8Array(buf).length};
+    },
+    async truncate() { return {}; }
+}
 Routes["/tabs/by-id/#TAB_ID/window"] = {
   description: `The window that this tab lives in;
 a symbolic link to the folder /windows/[id for this window].`,
