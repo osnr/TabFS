@@ -473,7 +473,7 @@ Read that file to evaluate and return the current value of that JS expression.`,
     })
   };
 })();
-Routes["/windows/#WINDOW_ID/crate"] = {
+Routes["/windows/#WINDOW_ID/create"] = {
     async write({windowId, buf}) {
         const url = buf.trim();
         await browser.tabs.create({ windowId: windowId, url: url });

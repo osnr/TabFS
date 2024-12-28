@@ -144,7 +144,7 @@ $ echo about:blank > mnt/tabs/create
 or in a specific window:
 
 ```
-$ about:blank > windows/<ID>/crate
+$ echo about:blank > windows/<ID>/create
 ```
 
 #### btw
