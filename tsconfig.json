@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "lib": ["ES2021", "DOM"]
+  },
+  "include": [
+    "extension/background.js",
+    "extension/types.d.ts"
+  ]
+} 

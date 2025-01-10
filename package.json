@@ -1,9 +1,13 @@
 {
 	"scripts": {
-		"lint": "eslint extension/background.js"
+		"lint": "eslint extension/background.js",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"eslint": "^8.57.0",
-		"eslint-plugin-jsdoc": "^48.2.0"
+		"eslint-plugin-jsdoc": "^48.2.0",
+		"typescript": "^5.4.2",
+		"@types/chrome": "^0.0.293",
+		"@types/node": "^22.10.5"
 	}
 }

@@ -1,9 +1,12 @@
-// add; window.Routes = Routes;
+declare global {
+	interface Window {
+		Routes: { [path: string]: RouteHandler };
+		__backgroundJS?: string;
+		browser: typeof chrome.browser;
+	}
+}
 
-
-
-
-declare interface RouteHandler {
+export interface RouteHandler {
 	description?: string;
 	usage?: string | string[];
 	getattr?: (req: RequestObject) => Promise<StatObject> | StatObject;
@@ -23,7 +26,7 @@ declare interface RouteHandler {
 	__isInfill?: boolean;
 }
 
-declare interface RequestObject {
+export interface RequestObject {
 	path: string;
 	buf?: string;
 	size?: number;
@@ -37,13 +40,13 @@ declare interface RequestObject {
 	extensionId?: string;
 }
 
-declare interface StatObject {
+export interface StatObject {
 	st_mode: number;
 	st_nlink: number;
 	st_size: number;
 }
 
-declare interface UnixConstants {
+export interface UnixConstants {
 	EPERM: number;
 	ENOENT: number;
 	ESRCH: number;
