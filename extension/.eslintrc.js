@@ -30,7 +30,9 @@ module.exports = {
 		"no-unused-vars": "off",
 		"no-useless-escape": "off",
 		"no-control-regex": "off",
-		"jsdoc/require-property-description": "off"
+		"jsdoc/require-property-description": "off",
+		"jsdoc/require-param-description": "off",
+		"jsdoc/require-returns-description": "off"
 	},
 	"settings": {
 		"jsdoc": {
