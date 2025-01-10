@@ -1,0 +1,23 @@
+{
+	"compilerOptions": {
+		"checkJs": true,
+		"strict": false,
+		"target": "ES2021",
+		"module": "ES2022",
+		"moduleResolution": "node",
+		"allowJs": true,
+		"typeRoots": [
+			"."
+		],
+		"baseUrl": "."
+	},
+	"include": [
+		"background.js",
+		"types.d.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"safari",
+		"vendor"
+	]
+}

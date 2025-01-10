@@ -1,6 +1,25 @@
-// This file is the heart of TabFS. Each route (synthetic file) is
-// defined by an entry in the Routes object.
+/// <reference types="./types.d.ts"/>
 
+/**
+ * @typedef {object} UnixConstants
+ * @property {number} EPERM - Operation not permitted
+ * @property {number} ENOENT - No such file or directory
+ * @property {number} ESRCH - No such process
+ * @property {number} EINTR - Interrupted system call
+ * @property {number} EIO - I/O error
+ * @property {number} ENXIO - No such device or address
+ * @property {number} ENOTSUP - Operation not supported
+ * @property {number} ETIMEDOUT - Operation timed out
+ * @property {number} S_IFMT - Type of file mask
+ * @property {number} S_IFIFO - Named pipe
+ * @property {number} S_IFCHR - Character special
+ * @property {number} S_IFDIR - Directory
+ * @property {number} S_IFBLK - Block special
+ * @property {number} S_IFREG - Regular file
+ * @property {number} S_IFLNK - Symbolic link
+ * @property {number} S_IFSOCK - Socket
+ */
+/** @type {UnixConstants} */
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -12,20 +31,37 @@ const unix = {
   ETIMEDOUT: 110, // FIXME: not on macOS (?)
 
   // Unix file types
-  S_IFMT: 0170000, // type of file mask
-  S_IFIFO: 010000, // named pipe (fifo)
-  S_IFCHR: 020000, // character special
-  S_IFDIR: 040000, // directory
-  S_IFBLK: 060000, // block special
-  S_IFREG: 0100000, // regular
-  S_IFLNK: 0120000, // symbolic link
-  S_IFSOCK: 0140000, // socket
-}
-class UnixError extends Error {
-  constructor(error) { super(); this.name = "UnixError"; this.error = error; }
+  S_IFMT: 0o170000, // type of file mask
+  S_IFIFO: 0o10000, // named pipe (fifo)
+  S_IFCHR: 0o20000, // character special
+  S_IFDIR: 0o40000, // directory
+  S_IFBLK: 0o60000, // block special
+  S_IFREG: 0o100000, // regular
+  S_IFLNK: 0o120000, // symbolic link
+  S_IFSOCK: 0o140000, // socket
 }
 
-const sanitize = (function() {
+/**
+ * Custom error class for Unix-style errors
+ * @augments Error
+ */
+class UnixError extends Error {
+  /**
+   * @param {number} error - Unix error code
+   */
+  constructor(error) {
+    super();
+    this.name = "UnixError";
+    this.error = error;
+  }
+}
+
+/**
+ * Sanitizes a filename by replacing illegal characters
+ * @param {string} input - The filename to sanitize
+ * @returns {string} The sanitized filename
+ */
+const sanitize = (function () {
   // from https://github.com/parshap/node-sanitize-filename/blob/209c39b914c8eb48ee27bcbde64b2c7822fdf3de/index.js
 
   // I've added ' ' to the list of illegal characters. it's a
@@ -37,6 +73,11 @@ const sanitize = (function() {
   var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
   var windowsTrailingRe = /[\. ]+$/;
 
+  /**
+   * @param {string} input - Input string to sanitize
+   * @param {string} replacement - Character to replace invalid characters with
+   * @returns {string} Sanitized string with invalid characters replaced
+   */
   function sanitize(input, replacement) {
     if (typeof input !== 'string') {
       throw new Error('Input must be string');
@@ -52,11 +93,11 @@ const sanitize = (function() {
   return input => sanitize(input, '_');
 })();
 
-const stringToUtf8Array = (function() {
+const stringToUtf8Array = (function () {
   const encoder = new TextEncoder("utf-8");
   return str => encoder.encode(str);
 })();
-const utf8ArrayToString = (function() {
+const utf8ArrayToString = (function () {
   const decoder = new TextDecoder("utf-8");
   return utf8 => decoder.decode(utf8);
 })();
@@ -64,32 +105,41 @@ const utf8ArrayToString = (function() {
 // btoa cannot be used on Uint8Arrays or strings containing utf8 characters.
 // This is the best solution per https://stackoverflow.com/a/66046176
 const utf8ArrayToBase64 = async (data) => {
-    if(data.length == 0) return '';
+  if (data.length == 0) return '';
 
-    // Use a FileReader to generate a base64 data URI
-    const base64url = await new Promise((r) => {
-        const reader = new FileReader()
-        reader.onload = () => r(reader.result)
-        reader.readAsDataURL(new Blob([data]))
-    });
+  // Use a FileReader to generate a base64 data URI
+  const base64url = await new Promise((r) => {
+    const reader = new FileReader()
+    reader.onload = () => r(reader.result)
+    reader.readAsDataURL(new Blob([data]))
+  });
 
-    /*
-    The result looks like
-    "data:application/octet-stream;base64,<your base64 data>", 
-    so we split off the beginning:
-    */
-    return base64url.split(",", 2)[1]
+  /*
+  The result looks like
+  "data:application/octet-stream;base64,<your base64 data>", 
+  so we split off the beginning:
+  */
+  return base64url.split(",", 2)[1]
 };
 
-// global so it can be hot-reloaded
-window.Routes = {};
-
-// Helper function: you provide getData and setData functions that define
-// the contents of an entire file => it returns a proper route handler
-// object with a full set of file operations that you can put in
-// `Routes` (so clients can read and write sections of the file, stat
-// it to get its size and see it show up in ls, etc),
-const makeRouteWithContents = (function() {
+/**
+ * Creates a route handler for a file with specified contents
+ * @param {Function} getData - Function to get file contents
+ * @param {Function} [setData] - Optional function to set file contents
+ * @returns {RouteHandler} Route handler object
+ */
+const makeRouteWithContents = (function () {
+  /**
+   * @typedef {object} CacheInterface
+   * @property {{[handle: number]: {path: string, object: Uint8Array}}} store - Map of handles to cached objects
+   * @property {number} nextHandle - Next available handle number
+   * @property {(path: string, object: Uint8Array) => number} storeObject
+   * @property {(handle: number) => Uint8Array} getObjectForHandle
+   * @property {(handle: number, object: Uint8Array) => void} setObjectForHandle
+   * @property {(handle: number) => void} removeObjectForHandle
+   * @property {(path: string, object: Uint8Array) => void} setObjectForPath
+   */
+  /** @type {CacheInterface} */
   const Cache = {
     // used when you open a file to cache the content we got from the
     // browser until you close that file. (so we can respond to
@@ -99,7 +149,7 @@ const makeRouteWithContents = (function() {
     store: {}, nextHandle: 0,
     storeObject(path, object) {
       const handle = ++this.nextHandle;
-      this.store[handle] = {path, object};
+      this.store[handle] = { path, object };
       return handle;
     },
     getObjectForHandle(handle) { return this.store[handle].object; },
@@ -114,6 +164,10 @@ const makeRouteWithContents = (function() {
     }
   };
 
+  /**
+   * @param {string|Uint8Array} stringOrArray - Input string or array
+   * @returns {Uint8Array} UTF8 array
+   */
   function toUtf8Array(stringOrArray) {
     if (typeof stringOrArray == 'string') { return stringToUtf8Array(stringOrArray); }
     else { return stringOrArray; }
@@ -131,7 +185,7 @@ const makeRouteWithContents = (function() {
       const data = await getData(req);
       if (typeof data === 'undefined') { throw new UnixError(unix.ENOENT); }
       return {
-        st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
+        st_mode: unix.S_IFREG | 0o444 | (setData ? 0o222 : 0),
         st_nlink: 1,
         // you'll want to override this if getData() is slow, because
         // getattr() gets called a lot more cavalierly than open().
@@ -146,11 +200,11 @@ const makeRouteWithContents = (function() {
       if (typeof data === 'undefined') { throw new UnixError(unix.ENOENT); }
       return { fh: Cache.storeObject(req.path, toUtf8Array(data)) };
     },
-    async read({fh, size, offset}) {
+    async read({ fh, size, offset }) {
       return { buf: Cache.getObjectForHandle(fh).slice(offset, offset + size) };
     },
     async write(req) {
-      const {fh, offset, buf} = req;
+      const { fh, offset, buf } = req;
       let arr = Cache.getObjectForHandle(fh);
       const bufarr = stringToUtf8Array(buf);
       if (offset + bufarr.length > arr.length) {
@@ -165,7 +219,7 @@ const makeRouteWithContents = (function() {
       // if they want to hot-reload just one function the user modified)
       await setData(req, utf8ArrayToString(arr)); return { size: bufarr.length };
     },
-    async release({fh}) { Cache.removeObjectForHandle(fh); return {}; },
+    async release({ fh }) { Cache.removeObjectForHandle(fh); return {}; },
 
     async truncate(req) {
       let arr = toUtf8Array(await getData(req));
@@ -182,35 +236,44 @@ const makeRouteWithContents = (function() {
   return makeRouteWithContents;
 })();
 
-// Helper function: returns a route handler for `path` based on all
-// the children of `path` that already exist in Routes.
-// 
-// e.g., if `Routes['/tabs/create']` and `Routes['/tabs/by-id']` and
-// `Routes['/tabs/last-focused']` are all already defined, then
-// `makeDefaultRouteForDirectory('/tabs')` will return a route that
-// defines a directory with entries 'create', 'by-id', and
-// 'last-focused'.
+/**
+ * @param {string} path - Directory path
+ * @returns {RouteHandler} Route handler object
+ */
 function makeDefaultRouteForDirectory(path) {
+  /**
+   * @param {string} p - Path to check
+   * @returns {number} Depth of path (number of / characters)
+   */
   function depth(p) { return p === '/' ? 0 : (p.match(/\//g) || []).length; }
 
   // find all direct children
   let entries = Object.keys(Routes)
-      .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
-      .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0])
-      // exclude entries with variables like :FILENAME in them
-      .filter(k => !k.includes("#") && !k.includes(":"));
+    .filter(k => k.startsWith(path) && depth(k) === depth(path) + 1)
+    .map(k => k.substr((path === '/' ? 0 : path.length) + 1).split('/')[0])
+    // exclude entries with variables like :FILENAME in them
+    .filter(k => !k.includes("#") && !k.includes(":"));
 
   entries = [".", "..", ...new Set(entries)];
   return { readdir() { return { entries }; }, __isInfill: true };
 }
 
+/**
+ * Routes is a global object that contains all the routes for the extension.
+ * @type {object}
+ */
+/** @type {{[path: string]: RouteHandler}} */
+var Routes = {};
+
+window.Routes = Routes;
+
 Routes["/tabs/create"] = {
   description: 'Create a new tab.',
   usage: 'echo "https://www.google.com" > $0',
-  async write({buf}) {
+  async write({ buf }) {
     const url = buf.trim();
-    await browser.tabs.create({url});
-    return {size: stringToUtf8Array(buf).length};
+    await browser.tabs.create({ url });
+    return { size: stringToUtf8Array(buf).length };
   },
   async truncate() { return {}; }
 };
@@ -220,7 +283,7 @@ Routes["/tabs/by-title"] = {
   usage: 'ls $0',
   getattr() {
     return {
-      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_mode: unix.S_IFDIR | 0o777, // writable so you can delete tabs
       st_nlink: 3,
       st_size: 0,
     };
@@ -236,10 +299,10 @@ Routes["/tabs/by-title/:TAB_TITLE.#TAB_ID"] = {
 It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
   // TODO: date
   usage: ['rm $0'],
-  async readlink({tabId}) {
+  async readlink({ tabId }) {
     return { buf: "../by-id/" + tabId };
   },
-  async unlink({tabId}) {
+  async unlink({ tabId }) {
     await browser.tabs.remove(tabId);
     return {};
   }
@@ -250,7 +313,7 @@ Routes["/tabs/by-window"] = {
   usage: 'ls $0',
   getattr() {
     return {
-      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_mode: unix.S_IFDIR | 0o777, // writable so you can delete tabs
       st_nlink: 3,
       st_size: 0,
     };
@@ -266,10 +329,10 @@ Routes["/tabs/by-window/#TAB_WINDOW_ID.:TAB_TITLE.#TAB_ID"] = {
 It's a symbolic link to the folder /tabs/by-id/#TAB_ID.`,
   // TODO: date
   usage: ['rm $0'],
-  async readlink({tabId}) {
+  async readlink({ tabId }) {
     return { buf: "../by-id/" + tabId };
   },
-  async unlink({tabId}) {
+  async unlink({ tabId }) {
     await browser.tabs.remove(tabId);
     return {};
   }
@@ -313,25 +376,41 @@ Routes["/tabs/by-id"] = {
 
 // TODO: can I trigger 1. nav to Finder and 2. nav to Terminal from toolbar click?
 
-(function() {
-  const routeForTab = (readHandler, writeHandler) => makeRouteWithContents(async ({tabId}) => {
+(function () {
+  /**
+   * @typedef {object} TabInfo
+   * @property {number} id - Tab ID
+   * @property {string} url - Tab URL
+   * @property {string} title - Tab title
+   * @property {boolean} active - Whether tab is active
+   * @property {number} windowId - Window ID
+   * @param {(tab: TabInfo) => string} readHandler - Function to read tab data
+   * @param {(buf: string) => object} [writeHandler] - Optional function to write tab data
+   * @returns {RouteHandler} Route handler
+   */
+  const routeForTab = (readHandler, writeHandler) => makeRouteWithContents(async ({ tabId }) => {
     const tab = await browser.tabs.get(tabId);
     return readHandler(tab);
 
-  }, writeHandler ? async ({tabId}, buf) => {
+  }, writeHandler ? async ({ tabId }, buf) => {
     await browser.tabs.update(tabId, writeHandler(buf));
   } : undefined);
 
-  const routeFromScript = code => makeRouteWithContents(async ({tabId}) => {
-    return (await browser.tabs.executeScript(tabId, {code}))[0];
+  /**
+   * Creates a route for a tab with read/write handlers.
+   * @param {string} code - JavaScript code to execute in the tab
+   * @returns {RouteHandler} Route handler
+   */
+  const routeFromScript = code => makeRouteWithContents(async ({ tabId }) => {
+    return (await browser.tabs.executeScript(tabId, { code }))[0];
   });
 
   Routes["/tabs/by-id/#TAB_ID/url.txt"] = {
     description: `Text file containing the current URL of this tab.`,
     usage: ['cat $0',
-            'echo "https://www.google.com" > $0'],
+      'echo "https://www.google.com" > $0'],
     ...routeForTab(tab => tab.url + "\n",
-                   buf => ({ url: buf }))
+      buf => ({ url: buf }))
   };
   Routes["/tabs/by-id/#TAB_ID/title.txt"] = {
     description: `Text file containing the current title of this tab.`,
@@ -352,7 +431,7 @@ Routes["/tabs/by-id"] = {
   Routes["/tabs/by-id/#TAB_ID/active"] = {
     description: 'Text file containing `true` or `false` depending on whether this tab is active in its window.',
     usage: ['cat $0',
-            'echo true > $0'],
+      'echo true > $0'],
     ...routeForTab(
       tab => JSON.stringify(tab.active) + '\n',
       // WEIRD: we do startsWith because you might end up with buf
@@ -361,51 +440,62 @@ Routes["/tabs/by-id"] = {
     )
   };
 })();
+
+/**
+ * Creates a writable directory object.
+ * @typedef {object} WritableDirectory
+ * @property {{[key: string]: string}} directory - Directory contents
+ * @property {RouteHandler} routeForRoot - Route handler for root directory
+ * @property {RouteHandler} routeForFilename - Route handler for files
+ * @returns {WritableDirectory} A writable directory object.
+ */
 function createWritableDirectory() {
   // Returns a 'writable directory' object, which represents a
   // writable directory that users can put arbitrary stuff into. It's
   // not itself a route, but it has .routeForRoot and
   // .routeForFilename properties that are routes.
-  
+
   const dir = {};
   return {
     directory: dir,
     routeForRoot: {
-      async readdir({path}) {
+      async readdir({ path: _ }) {
         // get just last component of keys (filename)
-        return { entries: [".", "..",
-                           ...Object.keys(dir).map(
-                             key => key.substr(key.lastIndexOf("/") + 1)
-                           )] };
+        return {
+          entries: [".", "..",
+            ...Object.keys(dir).map(
+              key => key.substr(key.lastIndexOf("/") + 1)
+            )]
+        };
       },
       getattr() {
         return {
-          st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
+          st_mode: unix.S_IFDIR | 0o777, // writable so you can create/rm evals
           st_nlink: 3,
           st_size: 0,
         };
       },
     },
     routeForFilename: {
-      async mknod({path, mode}) {
+      async mknod({ path, mode: __ }) {
         dir[path] = '';
         return {};
       },
-      async unlink({path}) {
+      async unlink({ path }) {
         delete dir[path];
         return {};
       },
 
       ...makeRouteWithContents(
-        async ({path}) => dir[path],
-        async ({path}, buf) => { dir[path] = buf; }
+        async ({ path }) => dir[path],
+        async ({ path }, buf) => { dir[path] = buf; }
       )
     }
   };
 }
 
 
-(function() {
+(function () {
   const evals = createWritableDirectory();
   Routes["/tabs/by-id/#TAB_ID/evals"] = {
     ...evals.routeForRoot,
@@ -417,30 +507,30 @@ function createWritableDirectory() {
     // FIXME: use $0 here
     // FIXME: document allFrames option
     usage: ['echo "2 + 2" > tabs/by-id/#TAB_ID/evals/twoplustwo.js',
-            'cat tabs/by-id/#TAB_ID/evals/twoplustwo.js.result'],
+      'cat tabs/by-id/#TAB_ID/evals/twoplustwo.js.result'],
     async write(req) {
       const ret = await evals.routeForFilename.write(req);
       const code = evals.directory[req.path];
       const allFrames = req.path.endsWith('.all-frames.js');
       // TODO: return other results beyond [0] (when all-frames is on)
-      const result = (await browser.tabs.executeScript(req.tabId, {code, allFrames}))[0];
+      const result = (await browser.tabs.executeScript(req.tabId, { code, allFrames }))[0];
       evals.directory[req.path + '.result'] = JSON.stringify(result) + '\n';
       return ret;
     }
   };
 })();
-(function() {
+(function () {
   const watches = {};
   Routes["/tabs/by-id/#TAB_ID/watches"] = {
     description: `Put a file in this folder with a JS expression as its filename.
 Read that file to evaluate and return the current value of that JS expression.`,
     usage: 'ls $0',
-    async readdir({tabId}) {
+    async readdir({ tabId }) {
       return { entries: [".", "..", ...Object.keys(watches[tabId] || [])] };
     },
     getattr() {
       return {
-        st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm watches
+        st_mode: unix.S_IFDIR | 0o777, // writable so you can create/rm watches
         st_nlink: 3,
         st_size: 0,
       };
@@ -450,19 +540,19 @@ Read that file to evaluate and return the current value of that JS expression.`,
     description: `A file with a JS expression :EXPR as its filename.`,
     usage: `touch '/tabs/by-id/#TAB_ID/watches/2+2' && cat '/tabs/by-id/#TAB_ID/watches/2+2'`,
     // NOTE: eval runs in extension's content script, not in original page JS context
-    async mknod({tabId, expr, mode}) {
+    async mknod({ tabId, expr, mode: _ }) {
       watches[tabId] = watches[tabId] || {};
-      watches[tabId][expr] = async function() {
-        return (await browser.tabs.executeScript(tabId, {code: expr}))[0];
+      watches[tabId][expr] = async function () {
+        return (await browser.tabs.executeScript(tabId, { code: expr }))[0];
       };
       return {};
     },
-    async unlink({tabId, expr}) {
+    async unlink({ tabId, expr }) {
       delete watches[tabId][expr]; // TODO: also delete watches[tabId] if empty
       return {};
     },
 
-    ...makeRouteWithContents(async ({tabId, expr}) => {
+    ...makeRouteWithContents(async ({ tabId, expr }) => {
       if (!watches[tabId] || !(expr in watches[tabId])) { throw new UnixError(unix.ENOENT); }
       return JSON.stringify(await watches[tabId][expr]()) + '\n';
 
@@ -474,17 +564,17 @@ Read that file to evaluate and return the current value of that JS expression.`,
   };
 })();
 Routes["/windows/#WINDOW_ID/create"] = {
-    async write({windowId, buf}) {
-        const url = buf.trim();
-        await browser.tabs.create({ windowId: windowId, url: url });
-        return {size: stringToUtf8Array(buf).length};
-    },
-    async truncate() { return {}; }
+  async write({ windowId, buf }) {
+    const url = buf.trim();
+    await browser.tabs.create({ windowId: windowId, url: url });
+    return { size: stringToUtf8Array(buf).length };
+  },
+  async truncate() { return {}; }
 }
 Routes["/tabs/by-id/#TAB_ID/window"] = {
   description: `The window that this tab lives in;
 a symbolic link to the folder /windows/[id for this window].`,
-  async readlink({tabId}) {
+  async readlink({ tabId }) {
     const tab = await browser.tabs.get(tabId);
     return { buf: "../../../windows/" + tab.windowId };
   }
@@ -493,34 +583,42 @@ Routes["/tabs/by-id/#TAB_ID/control"] = {
   description: `Write control commands to this file to control this tab;
 see https://developer.chrome.com/extensions/tabs.`,
   usage: ['echo remove > $0',
-          'echo reload > $0',
-          'echo goForward > $0',
-          'echo goBack > $0',
-          'echo discard > $0'],
-  async write({tabId, buf}) {
+    'echo reload > $0',
+    'echo goForward > $0',
+    'echo goBack > $0',
+    'echo discard > $0'],
+  async write({ tabId, buf }) {
     const command = buf.trim();
     await browser.tabs[command](tabId);
-    return {size: stringToUtf8Array(buf).length};
+    return { size: stringToUtf8Array(buf).length };
   },
-  async truncate({size}) { return {}; }
+  async truncate({ size: _ }) { return {}; }
 };
 // debugger/ : debugger-API-dependent (Chrome-only)
-(function() {
+(function () {
   if (!chrome.debugger) return;
 
+  /**
+   * @param {number} tabId - Tab ID to attach debugger to
+   * @returns {Promise<void>} Promise that resolves when debugger is attached
+   */
   async function attachDebugger(tabId) {
-    return new Promise((resolve, reject) => chrome.debugger.attach({tabId}, "1.3", () => {
+    return new Promise((resolve, reject) => chrome.debugger.attach({ tabId }, "1.3", () => {
       if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
       else { resolve(); }
     }));
   }
+  /**
+   * @param {number} tabId - Tab ID to detach debugger from
+   * @returns {Promise<void>} Promise that resolves when debugger is detached
+   */
   async function detachDebugger(tabId) {
-    return new Promise((resolve, reject) => chrome.debugger.detach({tabId}, () => {
+    return new Promise((resolve, reject) => chrome.debugger.detach({ tabId }, () => {
       if (chrome.runtime.lastError) { reject(chrome.runtime.lastError); }
       else { resolve(); }
     }));
   }
-  const TabManager = (function() {
+  const TabManager = (function () {
     if (chrome.debugger) chrome.debugger.onEvent.addListener((source, method, params) => {
       console.log(source, method, params);
       if (method === "Page.frameStartedLoading") {
@@ -535,7 +633,7 @@ see https://developer.chrome.com/extensions/tabs.`,
 
     return {
       scriptsForTab: {},
-      debugTab: async function(tabId) {
+      debugTab: async function (tabId) {
         // meant to be higher-level wrapper for raw attach/detach
         // TODO: could we remember if we're already attached? idk if it's worth it
         try { await attachDebugger(tabId); }
@@ -547,16 +645,22 @@ see https://developer.chrome.com/extensions/tabs.`,
         }
         // TODO: detach automatically? some kind of reference counting thing?
       },
-      enableDomainForTab: async function(tabId, domain) {
+      enableDomainForTab: async function (tabId, domain) {
         // TODO: could we remember if we're already enabled? idk if it's worth it
         if (domain === 'Debugger') { TabManager.scriptsForTab[tabId] = {}; }
         await sendDebuggerCommand(tabId, `${domain}.enable`, {});
       }
     };
   })();
+  /**
+   * @param {number} tabId - Tab ID to send command to
+   * @param {string} method - Debugger method to call
+   * @param {object} commandParams - Parameters for debugger command
+   * @returns {Promise<any>} Promise that resolves with command result
+   */
   function sendDebuggerCommand(tabId, method, commandParams) {
     return new Promise((resolve, reject) =>
-      chrome.debugger.sendCommand({tabId}, method, commandParams, result => {
+      chrome.debugger.sendCommand({ tabId }, method, commandParams, result => {
         if (result) { resolve(result); } else { reject(chrome.runtime.lastError); }
       })
     );
@@ -567,20 +671,20 @@ see https://developer.chrome.com/extensions/tabs.`,
   // TODO: scripts/ TODO: allow creation, eval immediately
 
   Routes["/tabs/by-id/#TAB_ID/debugger/resources"] = {
-    async readdir({tabId}) {
+    async readdir({ tabId }) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
-      const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+      const { frameTree } = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
       return { entries: [".", "..", ...frameTree.resources.map(r => sanitize(String(r.url)))] };
     }
   };
-  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = makeRouteWithContents(async ({path, tabId, suffix}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/resources/:SUFFIX"] = makeRouteWithContents(async ({ path: _, tabId, suffix }) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Page");
 
-    const {frameTree} = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
+    const { frameTree } = await sendDebuggerCommand(tabId, "Page.getResourceTree", {});
     for (let resource of frameTree.resources) {
       const resourceSuffix = sanitize(String(resource.url));
       if (resourceSuffix === suffix) {
-        let {base64Encoded, content} = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
+        let { base64Encoded, content } = await sendDebuggerCommand(tabId, "Page.getResourceContent", {
           frameId: frameTree.frame.id,
           url: resource.url
         });
@@ -591,18 +695,27 @@ see https://developer.chrome.com/extensions/tabs.`,
     throw new UnixError(unix.ENOENT);
   });
   Routes["/tabs/by-id/#TAB_ID/debugger/scripts"] = {
-    async opendir({tabId}) {
+    async opendir({ tabId }) {
       await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
       return { fh: 0 };
     },
-    async readdir({tabId}) {
+    async readdir({ tabId }) {
       // it's useful to put the ID first in the script filenames, so
       // the .js extension stays on the end
       const scriptFileNames = Object.values(TabManager.scriptsForTab[tabId])
-            .map(params => params.scriptId + "_" + sanitize(params.url));
+        .map(params => params.scriptId + "_" + sanitize(params.url));
       return { entries: [".", "..", ...scriptFileNames] };
     }
   };
+  /**
+   * @param {number} tabId - Tab ID to get script info for
+   * @param {string} filename - Script filename
+   * @typedef {object} DebuggerScriptInfo
+   * @property {string} scriptId - Script ID
+   * @property {string} url - Script URL
+   * @returns {DebuggerScriptInfo} Script info object
+   * @throws {UnixError} If script not found
+   */
   function pathScriptInfo(tabId, filename) {
     const [scriptId, ...rest] = filename.split("_");
     const scriptInfo = TabManager.scriptsForTab[tabId][scriptId];
@@ -611,42 +724,42 @@ see https://developer.chrome.com/extensions/tabs.`,
     }
     return scriptInfo;
   }
-  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = makeRouteWithContents(async ({tabId, filename}) => {
+  Routes["/tabs/by-id/#TAB_ID/debugger/scripts/:FILENAME"] = makeRouteWithContents(async ({ tabId, filename }) => {
     await TabManager.debugTab(tabId);
     await TabManager.enableDomainForTab(tabId, "Page");
     await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const {scriptId} = pathScriptInfo(tabId, filename);
-    const {scriptSource} = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", {scriptId});
+    const { scriptId } = pathScriptInfo(tabId, filename);
+    const { scriptSource } = await sendDebuggerCommand(tabId, "Debugger.getScriptSource", { scriptId });
     return scriptSource;
 
-  }, async ({tabId, filename}, buf) => {
+  }, async ({ tabId, filename }, buf) => {
     await TabManager.debugTab(tabId); await TabManager.enableDomainForTab(tabId, "Debugger");
 
-    const {scriptId} = pathScriptInfo(tabId, filename);
-    await sendDebuggerCommand(tabId, "Debugger.setScriptSource", {scriptId, scriptSource: buf});
+    const { scriptId } = pathScriptInfo(tabId, filename);
+    await sendDebuggerCommand(tabId, "Debugger.setScriptSource", { scriptId, scriptSource: buf });
   });
 })();
 
 Routes["/tabs/by-id/#TAB_ID/inputs"] = {
   description: `Contains a file for each text input and textarea on this page (as long as it has an ID, currently).`,
-  async readdir({tabId}) {
+  async readdir({ tabId }) {
     // TODO: assign new IDs to inputs without them?
     const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
                     .map(e => e.id).filter(id => id)`;
-    const ids = (await browser.tabs.executeScript(tabId, {code}))[0];
+    const ids = (await browser.tabs.executeScript(tabId, { code }))[0];
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
-Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = makeRouteWithContents(async ({tabId, inputId}) => {
+Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = makeRouteWithContents(async ({ tabId, inputId }) => {
   const code = `document.getElementById('${inputId}').value`;
-  const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
+  const inputValue = (await browser.tabs.executeScript(tabId, { code }))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
   return inputValue;
 
-}, async ({tabId, inputId}, buf) => {
+}, async ({ tabId, inputId }, buf) => {
   const code = `document.getElementById('${inputId}').value = unescape('${escape(buf)}')`;
-  await browser.tabs.executeScript(tabId, {code});
+  await browser.tabs.executeScript(tabId, { code });
 });
 
 Routes["/windows"] = {
@@ -657,17 +770,17 @@ Routes["/windows"] = {
 };
 
 Routes["/windows/#WINDOW_ID/tabs"] = {
-  async readdir({windowId}) {
-    const tabs = await browser.tabs.query({windowId});
-    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title) + "." + String(tab.id))) ] }
+  async readdir({ windowId }) {
+    const tabs = await browser.tabs.query({ windowId });
+    return { entries: [".", "..", ...tabs.map(tab => sanitize(String(tab.title) + "." + String(tab.id)))] }
   }
 }
 
 Routes["/windows/#WINDOW_ID/tabs/:TAB_TITLE.#TAB_ID"] = {
-  async readlink({tabId}) {
+  async readlink({ tabId }) {
     return { buf: "../../../tabs/by-id/" + tabId };
   },
-  async unlink({tabId}) {
+  async unlink({ tabId }) {
     await browser.tabs.remove(tabId);
     return {};
   }
@@ -681,56 +794,71 @@ Routes["/windows/last-focused"] = {
   }
 };
 
-(function() {
-  const withWindow = (readHandler, writeHandler) => makeRouteWithContents(async ({windowId}) => {
+(function () {
+  /**
+   * @typedef {object} WindowInfo
+   * @property {number} id - Window ID
+   * @property {boolean} focused - Whether window is focused
+   */
+
+  /**
+   * @param {(window: WindowInfo) => string} readHandler
+   * @param {(buf: string) => object} [writeHandler]
+   * @returns {RouteHandler}
+   */
+  const withWindow = (readHandler, writeHandler) => makeRouteWithContents(async ({ windowId }) => {
     const window = await browser.windows.get(windowId);
     return readHandler(window);
 
-  }, writeHandler ? async ({windowId}, buf) => {
+  }, writeHandler ? async ({ windowId }, buf) => {
     await browser.windows.update(windowId, writeHandler(buf));
   } : undefined);
 
   Routes["/windows/#WINDOW_ID/focused"] =
     withWindow(window => JSON.stringify(window.focused) + '\n',
-               buf => ({ focused: buf.startsWith('true') }));
+      buf => ({ focused: buf.startsWith('true') }));
 })();
-Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...makeRouteWithContents(async ({windowId}) => {
-  // screen capture is a window thing and not a tab thing because you
-  // can only capture the visible tab for each window anyway; you
-  // can't take a screenshot of just any arbitrary tab
-  const dataUrl = await browser.tabs.captureVisibleTab(windowId, {format: 'png'});
-  return Uint8Array.from(atob(dataUrl.substr(("data:image/png;base64,").length)),
-                         c => c.charCodeAt(0));
+Routes["/windows/#WINDOW_ID/visible-tab.png"] = {
+  ...makeRouteWithContents(async ({ windowId }) => {
+    // screen capture is a window thing and not a tab thing because you
+    // can only capture the visible tab for each window anyway; you
+    // can't take a screenshot of just any arbitrary tab
+    const dataUrl = await browser.tabs.captureVisibleTab(windowId, { format: 'png' });
+    return Uint8Array.from(atob(dataUrl.substr(("data:image/png;base64,").length)),
+      c => c.charCodeAt(0));
 
-}), async getattr() {
-  return {
-    st_mode: unix.S_IFREG | 0444,
-    st_nlink: 1,
-    st_size: 10000000 // hard-code to 10MB for now
-  };
-} };
+  }), async getattr() {
+    return {
+      st_mode: unix.S_IFREG | 0o444,
+      st_nlink: 1,
+      st_size: 10000000 // hard-code to 10MB for now
+    };
+  }
+};
 
 
-Routes["/extensions"] = {  
+Routes["/extensions"] = {
   async readdir() {
     const infos = await browser.management.getAll();
     return { entries: [".", "..", ...infos.map(info => `${sanitize(info.name)}.${info.id}`)] };
   }
 };
-Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = { ...makeRouteWithContents(async ({extensionId}) => {
-  const info = await browser.management.get(extensionId);
-  return String(info.enabled) + '\n';
+Routes["/extensions/:EXTENSION_TITLE.:EXTENSION_ID/enabled"] = {
+  ...makeRouteWithContents(async ({ extensionId }) => {
+    const info = await browser.management.get(extensionId);
+    return String(info.enabled) + '\n';
 
-}, async ({extensionId}, buf) => {
-  await browser.management.setEnabled(extensionId, buf.trim() === "true");
+  }, async ({ extensionId }, buf) => {
+    await browser.management.setEnabled(extensionId, buf.trim() === "true");
 
-  // suppress truncate so it doesn't accidentally flip the state when you do, e.g., `echo true >`
-}), truncate() { return {}; } };
+    // suppress truncate so it doesn't accidentally flip the state when you do, e.g., `echo true >`
+  }), truncate() { return {}; }
+};
 
 Routes["/runtime/reload"] = {
-  async write({buf}) {
+  async write({ buf }) {
     await browser.runtime.reload();
-    return {size: stringToUtf8Array(buf).length};
+    return { size: stringToUtf8Array(buf).length };
   },
   truncate() { return {}; }
 };
@@ -743,6 +871,10 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
 
   // WIP
   const jsLines = (window.__backgroundJS).split('\n');
+  /**
+   * @param {string} path - Route path to find line range for
+   * @returns {[number, number]|null} Start and end line numbers, or null if not found
+   */
   function findRouteLineRange(path) {
     for (let i = 0; i < jsLines.length; i++) {
       if (jsLines[i].includes(`Routes["${path}"] = `)) {
@@ -751,12 +883,12 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
         const startBracket = result[1];
         const startBracketIndex = result.index + result[0].length;
 
-        const endBracket = ({'(': ')', '{': '}'})[startBracket];
+        const endBracket = ({ '(': ')', '{': '}' })[startBracket];
         let counter = 1;
         for (let j = i; j < jsLines.length; j++) {
           for (let k = (j === i) ? startBracketIndex + 1 : 0;
-               k < jsLines[j].length;
-               k++) {
+            k < jsLines[j].length;
+            k++) {
             if (jsLines[j][k] === startBracket) { counter++; }
             else if (jsLines[j][k] === endBracket) { counter--; }
 
@@ -785,30 +917,29 @@ Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
     <p>Variables in this document, like :TAB_TITLE and #TAB_ID, are stand-ins for concrete values of what you actually have open in your browser in a running TabFS.</p>
     <p>(work in progress)</p>
     <dl>
-      ` + Object.entries(Routes).map(([path, {usage, description, __isInfill, readdir}]) => {
-        if (__isInfill) { return ''; }
-        let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
-        usages = usages.map(u => u.replace('\$0', path.substring(1) /* drop leading / */));
-        const lineRange = findRouteLineRange(path);
-        return `
+      ` + Object.entries(Routes).map(([path, { usage, description, __isInfill, readdir }]) => {
+    if (__isInfill) { return ''; }
+    let usages = usage ? (Array.isArray(usage) ? usage : [usage]) : [];
+    usages = usages.map(u => u.replace('\$0', path.substring(1) /* drop leading / */));
+    const lineRange = findRouteLineRange(path);
+    return `
           <dt>${readdir ? '&#x1F4C1;' : '&#x1F4C4;'} ${path.substring(1)}</dt>
           ${description ? `<dd class="description">${description}</dd>` :
-                          '<dd style="background-color: #f99">No description found!</dd>'}
+        '<dd style="background-color: #f99">No description found!</dd>'}
           ${usages.length > 0 ? `<dd><details><summary>Usage examples</summary>
             <ul>
               ${usages.map(u => `<li>${u}</li>`).join('\n')}
             </ul>
           </details></dd>` : '<dd style="background-color: #f99">No usage examples found!</dd>'}
           ${lineRange ?
-            `<dd><details>
-              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0]+1}-L${lineRange[1]+1}">on GitHub</a>)</summary>
-              <pre><code>${
-                jsLines.slice(lineRange[0], lineRange[1] + 1).join('\n')
-                // FIXME: escape for HTML
-              }</code></pre>
+        `<dd><details>
+              <summary>Source code (<a href="https://github.com/osnr/TabFS/blob/master/extension/background.js#L${lineRange[0] + 1}-L${lineRange[1] + 1}">on GitHub</a>)</summary>
+              <pre><code>${jsLines.slice(lineRange[0], lineRange[1] + 1).join('\n')
+        // FIXME: escape for HTML
+        }</code></pre>
             </details></dd>` : '<dd style="background-color: #f99">No source code found!</dd>'}
         `;
-      }).join('\n') + `
+  }).join('\n') + `
     </dl>
   </body>
 </html>
@@ -841,15 +972,15 @@ for (let key in Routes) {
     '^' + key
       .split('/')
       .map(keySegment => keySegment
-           .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-           .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
-             Routes[key].__matchVarCount++;
-             return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>` +
-                         (sigil === '#' ? '[0-9]+' : '[^/]+') + `)`;
-           }))
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/([#:])([A-Z_]+)/g, (_, sigil, varName) => {
+          Routes[key].__matchVarCount++;
+          return `(?<${sigil === '#' ? 'int$' : 'string$'}${varName}>` +
+            (sigil === '#' ? '[0-9]+' : '[^/]+') + `)`;
+        }))
       .join('/') + '$');
 
-  Routes[key].__match = function(path) {
+  Routes[key].__match = function (path) {
     const result = Routes[key].__regex.exec(path);
     if (!result) { return; }
 
@@ -869,15 +1000,15 @@ for (let key in Routes) {
   // if readdir -> directory -> add getattr, opendir, releasedir
   if (Routes[key].readdir) {
     Routes[key] = {
-      getattr() { 
+      getattr() {
         return {
-          st_mode: unix.S_IFDIR | 0755,
+          st_mode: unix.S_IFDIR | 0o755,
           st_nlink: 3,
           st_size: 0,
         };
       },
-      opendir({path}) { return { fh: 0 }; },
-      releasedir({path}) { return {}; },
+      opendir({ path: _ }) { return { fh: 0 }; },
+      releasedir({ path: _ }) { return {}; },
       ...Routes[key]
     };
 
@@ -886,7 +1017,7 @@ for (let key in Routes) {
       async getattr(req) {
         const st_size = (await this.readlink(req)).buf.length + 1;
         return {
-          st_mode: unix.S_IFLNK | 0444,
+          st_mode: unix.S_IFLNK | 0o444,
           st_nlink: 1,
           // You _must_ return correct linkee path length from getattr!
           st_size
@@ -894,12 +1025,12 @@ for (let key in Routes) {
       },
       ...Routes[key]
     };
-    
+
   } else if (Routes[key].read || Routes[key].write) {
     Routes[key] = {
       async getattr() {
         return {
-          st_mode: unix.S_IFREG | ((Routes[key].read && 0444) | (Routes[key].write && 0222)),
+          st_mode: unix.S_IFREG | ((Routes[key].read && 0o444) | (Routes[key].write && 0o222)),
           st_nlink: 1,
           st_size: 100 // FIXME
         };
@@ -915,10 +1046,15 @@ for (let key in Routes) {
 const sortedRoutes = Object.values(Routes).sort((a, b) =>
   a.__matchVarCount - b.__matchVarCount
 );
+/**
+ * @param {string} path - Path to match
+ * @returns {[RouteHandler, object]} Tuple of [route, variables]
+ * @throws {UnixError} If no route matches
+ */
 function tryMatchRoute(path) {
   if (path.match(/\/\._[^\/]+$/)) {
     // Apple Double ._whatever file for xattrs
-    throw new UnixError(unix.ENOTSUP); 
+    throw new UnixError(unix.ENOTSUP);
   }
 
   for (let route of sortedRoutes) {
@@ -929,6 +1065,14 @@ function tryMatchRoute(path) {
 }
 
 let port;
+/**
+ * @param {object} req - Request object from native host
+ * @param {string} req.path - Path being accessed
+ * @param {string} [req.buf] - Buffer contents
+ * @param {string} req.op - Operation being performed
+ * @param {number} req.id - Request ID
+ * @returns {Promise<void>}
+ */
 async function onMessage(req) {
   if (req.buf) req.buf = atob(req.buf);
   console.log('req', req);
@@ -944,7 +1088,7 @@ async function onMessage(req) {
   /* console.time(req.op + ':' + req.path);*/
   try {
     const [route, vars] = tryMatchRoute(req.path);
-    response = await route[req.op]({...req, ...vars});
+    response = await route[req.op]({ ...req, ...vars });
     response.op = req.op;
     if (response.buf) {
       if (response.buf instanceof Uint8Array) {
@@ -970,30 +1114,40 @@ async function onMessage(req) {
     response.id = req.id;
     port.postMessage(response);
   }
-};
+}
 
+/**
+ * @returns {void}
+ */
 function tryConnect() {
   // Safari is very weird -- it has this native app that we have to talk to,
   // so we poke that app to wake it up, get it to start the TabFS process
   // and boot a WebSocket, then connect to it.
   // Is there a better way to do this?
   if (chrome.runtime.getURL('/').startsWith('safari-web-extension://')) { // Safari-only
-    chrome.runtime.sendNativeMessage('com.rsnous.tabfs', {op: 'safari_did_connect'}, resp => {
+    chrome.runtime.sendNativeMessage('com.rsnous.tabfs', { op: 'safari_did_connect' }, resp => {
       console.log(resp);
 
       let socket;
+      /**
+       * @param {number} checkAfterTime - Time to wait before checking connection
+       * @returns {void}
+       */
       function connectSocket(checkAfterTime) {
         socket = new WebSocket('ws://localhost:9991');
         socket.addEventListener('message', event => {
           onMessage(JSON.parse(event.data));
         });
 
-        port = { postMessage(message) {
-          socket.send(JSON.stringify(message));
-        } };
+        port = {
+          postMessage(message) {
+            socket.send(JSON.stringify(message));
+          }
+        };
 
         setTimeout(() => {
           if (socket.readyState === 1) {
+            // ws connection was successful
           } else {
             console.log('ws connection failed, retrying in', checkAfterTime);
             connectSocket(checkAfterTime * 2);
@@ -1004,7 +1158,7 @@ function tryConnect() {
     });
     return;
   }
-  
+
   port = chrome.runtime.connectNative('com.rsnous.tabfs');
   port.onMessage.addListener(onMessage);
   port.onDisconnect.addListener(p => {
@@ -1016,7 +1170,7 @@ function tryConnect() {
 if (typeof process === 'object') {
   // we're running in node (as part of a test)
   // return everything they might want to test
-  module.exports = {Routes, tryMatchRoute}; 
+  module.exports = { Routes, tryMatchRoute };
 
 } else {
   tryConnect();
