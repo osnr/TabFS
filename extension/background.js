@@ -18,8 +18,6 @@
  * @property {number} S_IFSOCK - Socket
  */
 
-const console = require('console');
-
 /** @type {UnixConstants} */
 const unix = {
   EPERM: 1,
