@@ -9,13 +9,14 @@ if [[ "$#" -lt 1 || (
               ( "$1" == "chrome" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "arc" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "vivaldi" && "$#" -eq 2 && ${#2} -eq 32 ) ||
+              ( "$1" == "vivaldibeta" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromebeta" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "chromium" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "edgedev" && "$#" -eq 2 && ${#2} -eq 32 ) ||
               ( "$1" == "opera" && "$#" -eq 2 && ${#2} -eq 32 ) ) ) ]]; then
     echo "Usage: $0 <chrome EXTENSION_ID | firefox |
                      chromebeta EXTENSION_ID | chromium EXTENSION_ID |
-                     vivaldi EXTENSION_ID | edgedev EXTENSION_ID |
+                     vivaldi EXTENSION_ID | vivaldibeta EXTENSION_ID | edgedev EXTENSION_ID |
                      brave EXTENSION_ID | opera EXTENSION_ID | arc EXTENSION_ID>"
     exit 2
 fi
@@ -42,6 +43,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/.config/chromium/NativeMessagingHosts";;
     "Linux vivaldi")
         MANIFEST_LOCATION="$HOME/.config/vivaldi/NativeMessagingHosts";;
+    "Linux vivaldibeta")
+        MANIFEST_LOCATION="$HOME/.config/vivaldi-snapshot/NativeMessagingHosts";;
     "Linux edgedev")
         MANIFEST_LOCATION="$HOME/.config/microsoft-edge-dev/NativeMessagingHosts";;
     "Linux opera")
@@ -54,6 +57,8 @@ case "$OS $BROWSER" in
         MANIFEST_LOCATION="$HOME/Library/Application Support/Chromium/NativeMessagingHosts";;
     "Darwin vivaldi")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Vivaldi/NativeMessagingHosts";;
+    "Darwin vivaldibeta")
+        MANIFEST_LOCATION="$HOME/Library/Application Support/Vivaldi Internal/NativeMessagingHosts";;
     "Darwin arc")
         MANIFEST_LOCATION="$HOME/Library/Application Support/Arc/User Data/NativeMessagingHosts";;
 esac
@@ -64,7 +69,7 @@ APP_NAME="com.rsnous.tabfs"
 EXE_PATH=$(pwd)/fs/tabfs
 
 case "$BROWSER" in
-    chrome | chromium | chromebeta | brave | vivaldi | edgedev | opera | arc)
+    chrome | chromium | chromebeta | brave | vivaldi | vivaldibeta | edgedev | opera | arc)
         EXTENSION_ID=$2
         MANIFEST=$(cat <<EOF
 {
