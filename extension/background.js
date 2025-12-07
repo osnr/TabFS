@@ -1,6 +1,12 @@
 // This file is the heart of TabFS. Each route (synthetic file) is
 // defined by an entry in the Routes object.
 
+// MV3 compatibility: In Chrome, use the chrome.* APIs directly.
+// In Firefox, the browser.* APIs are natively available.
+// We use a simple shim that prefers 'browser' (Firefox native) over 'chrome'.
+// Note: The webextension-polyfill is loaded separately in Firefox's manifest.
+const browser = globalThis.browser || chrome;
+
 const unix = {
   EPERM: 1,
   ENOENT: 2,
@@ -11,15 +17,15 @@ const unix = {
   ENOTSUP: 45,
   ETIMEDOUT: 110, // FIXME: not on macOS (?)
 
-  // Unix file types
-  S_IFMT: 0170000, // type of file mask
-  S_IFIFO: 010000, // named pipe (fifo)
-  S_IFCHR: 020000, // character special
-  S_IFDIR: 040000, // directory
-  S_IFBLK: 060000, // block special
-  S_IFREG: 0100000, // regular
-  S_IFLNK: 0120000, // symbolic link
-  S_IFSOCK: 0140000, // socket
+  // Unix file types (using 0o prefix for ES6 octal literals in strict mode)
+  S_IFMT: 0o170000, // type of file mask
+  S_IFIFO: 0o10000, // named pipe (fifo)
+  S_IFCHR: 0o20000, // character special
+  S_IFDIR: 0o40000, // directory
+  S_IFBLK: 0o60000, // block special
+  S_IFREG: 0o100000, // regular
+  S_IFLNK: 0o120000, // symbolic link
+  S_IFSOCK: 0o140000, // socket
 }
 class UnixError extends Error {
   constructor(error) { super(); this.name = "UnixError"; this.error = error; }
@@ -81,8 +87,31 @@ const utf8ArrayToBase64 = async (data) => {
     return base64url.split(",", 2)[1]
 };
 
+// Helper for MV3 script execution
+// In MV3, we can't execute arbitrary code strings directly with executeScript.
+// We pass the code as an argument and eval it in the page context.
+async function executeScript(tabId, code, allFrames = false) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames },
+      func: (codeToEval) => {
+        // eslint-disable-next-line no-eval
+        return eval(codeToEval);
+      },
+      args: [code],
+      world: 'MAIN' // Execute in page context to access page's JS
+    });
+    return results.map(r => r.result);
+  } catch (e) {
+    console.error('executeScript error:', e);
+    throw e;
+  }
+}
+
 // global so it can be hot-reloaded
-window.Routes = {};
+// In MV3 service workers, use globalThis instead of window
+const Routes = globalThis.Routes || {};
+globalThis.Routes = Routes;
 
 // Helper function: you provide getData and setData functions that define
 // the contents of an entire file => it returns a proper route handler
@@ -131,7 +160,7 @@ const makeRouteWithContents = (function() {
       const data = await getData(req);
       if (typeof data === 'undefined') { throw new UnixError(unix.ENOENT); }
       return {
-        st_mode: unix.S_IFREG | 0444 | (setData ? 0222 : 0),
+        st_mode: unix.S_IFREG | 0o444 | (setData ? 0o222 : 0),
         st_nlink: 1,
         // you'll want to override this if getData() is slow, because
         // getattr() gets called a lot more cavalierly than open().
@@ -220,7 +249,7 @@ Routes["/tabs/by-title"] = {
   usage: 'ls $0',
   getattr() {
     return {
-      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_mode: unix.S_IFDIR | 0o777, // writable so you can delete tabs
       st_nlink: 3,
       st_size: 0,
     };
@@ -250,7 +279,7 @@ Routes["/tabs/by-window"] = {
   usage: 'ls $0',
   getattr() {
     return {
-      st_mode: unix.S_IFDIR | 0777, // writable so you can delete tabs
+      st_mode: unix.S_IFDIR | 0o777, // writable so you can delete tabs
       st_nlink: 3,
       st_size: 0,
     };
@@ -323,7 +352,7 @@ Routes["/tabs/by-id"] = {
   } : undefined);
 
   const routeFromScript = code => makeRouteWithContents(async ({tabId}) => {
-    return (await browser.tabs.executeScript(tabId, {code}))[0];
+    return (await executeScript(tabId, code))[0];
   });
 
   Routes["/tabs/by-id/#TAB_ID/url.txt"] = {
@@ -380,7 +409,7 @@ function createWritableDirectory() {
       },
       getattr() {
         return {
-          st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm evals
+          st_mode: unix.S_IFDIR | 0o777, // writable so you can create/rm evals
           st_nlink: 3,
           st_size: 0,
         };
@@ -423,7 +452,7 @@ function createWritableDirectory() {
       const code = evals.directory[req.path];
       const allFrames = req.path.endsWith('.all-frames.js');
       // TODO: return other results beyond [0] (when all-frames is on)
-      const result = (await browser.tabs.executeScript(req.tabId, {code, allFrames}))[0];
+      const result = (await executeScript(req.tabId, code, allFrames))[0];
       evals.directory[req.path + '.result'] = JSON.stringify(result) + '\n';
       return ret;
     }
@@ -440,7 +469,7 @@ Read that file to evaluate and return the current value of that JS expression.`,
     },
     getattr() {
       return {
-        st_mode: unix.S_IFDIR | 0777, // writable so you can create/rm watches
+        st_mode: unix.S_IFDIR | 0o777, // writable so you can create/rm watches
         st_nlink: 3,
         st_size: 0,
       };
@@ -453,7 +482,7 @@ Read that file to evaluate and return the current value of that JS expression.`,
     async mknod({tabId, expr, mode}) {
       watches[tabId] = watches[tabId] || {};
       watches[tabId][expr] = async function() {
-        return (await browser.tabs.executeScript(tabId, {code: expr}))[0];
+        return (await executeScript(tabId, expr))[0];
       };
       return {};
     },
@@ -634,19 +663,19 @@ Routes["/tabs/by-id/#TAB_ID/inputs"] = {
     // TODO: assign new IDs to inputs without them?
     const code = `Array.from(document.querySelectorAll('textarea, input[type=text]'))
                     .map(e => e.id).filter(id => id)`;
-    const ids = (await browser.tabs.executeScript(tabId, {code}))[0];
+    const ids = (await executeScript(tabId, code))[0];
     return { entries: [".", "..", ...ids.map(id => `${id}.txt`)] };
   }
 };
 Routes["/tabs/by-id/#TAB_ID/inputs/:INPUT_ID.txt"] = makeRouteWithContents(async ({tabId, inputId}) => {
   const code = `document.getElementById('${inputId}').value`;
-  const inputValue = (await browser.tabs.executeScript(tabId, {code}))[0];
+  const inputValue = (await executeScript(tabId, code))[0];
   if (inputValue === null) { throw new UnixError(unix.ENOENT); } /* FIXME: hack to deal with if inputId isn't valid */
   return inputValue;
 
 }, async ({tabId, inputId}, buf) => {
   const code = `document.getElementById('${inputId}').value = unescape('${escape(buf)}')`;
-  await browser.tabs.executeScript(tabId, {code});
+  await executeScript(tabId, code);
 });
 
 Routes["/windows"] = {
@@ -704,7 +733,7 @@ Routes["/windows/#WINDOW_ID/visible-tab.png"] = { ...makeRouteWithContents(async
 
 }), async getattr() {
   return {
-    st_mode: unix.S_IFREG | 0444,
+    st_mode: unix.S_IFREG | 0o444,
     st_nlink: 1,
     st_size: 10000000 // hard-code to 10MB for now
   };
@@ -735,14 +764,16 @@ Routes["/runtime/reload"] = {
   truncate() { return {}; }
 };
 
-window.fetch(chrome.runtime.getURL('background.js'))
-  .then(async r => { window.__backgroundJS = await r.text(); });
+// In MV3 service workers, use globalThis instead of window
+let __backgroundJS = null;
+fetch(chrome.runtime.getURL('background.js'))
+  .then(async r => { __backgroundJS = await r.text(); });
 
 Routes["/runtime/routes.html"] = makeRouteWithContents(async () => {
-  if (!window.__backgroundJS) throw new UnixError(unix.EIO);
+  if (!__backgroundJS) throw new UnixError(unix.EIO);
 
   // WIP
-  const jsLines = (window.__backgroundJS).split('\n');
+  const jsLines = (__backgroundJS).split('\n');
   function findRouteLineRange(path) {
     for (let i = 0; i < jsLines.length; i++) {
       if (jsLines[i].includes(`Routes["${path}"] = `)) {
@@ -871,7 +902,7 @@ for (let key in Routes) {
     Routes[key] = {
       getattr() { 
         return {
-          st_mode: unix.S_IFDIR | 0755,
+          st_mode: unix.S_IFDIR | 0o755,
           st_nlink: 3,
           st_size: 0,
         };
@@ -886,7 +917,7 @@ for (let key in Routes) {
       async getattr(req) {
         const st_size = (await this.readlink(req)).buf.length + 1;
         return {
-          st_mode: unix.S_IFLNK | 0444,
+          st_mode: unix.S_IFLNK | 0o444,
           st_nlink: 1,
           // You _must_ return correct linkee path length from getattr!
           st_size
@@ -899,7 +930,7 @@ for (let key in Routes) {
     Routes[key] = {
       async getattr() {
         return {
-          st_mode: unix.S_IFREG | ((Routes[key].read && 0444) | (Routes[key].write && 0222)),
+          st_mode: unix.S_IFREG | ((Routes[key].read && 0o444) | (Routes[key].write && 0o222)),
           st_nlink: 1,
           st_size: 100 // FIXME
         };
@@ -1016,8 +1047,11 @@ function tryConnect() {
 if (typeof process === 'object') {
   // we're running in node (as part of a test)
   // return everything they might want to test
-  module.exports = {Routes, tryMatchRoute}; 
-
+  // Note: In ES modules, use export instead of module.exports
+  // but keep CommonJS for Node test compatibility
+  if (typeof module !== 'undefined') {
+    module.exports = {Routes, tryMatchRoute};
+  }
 } else {
   tryConnect();
 }
